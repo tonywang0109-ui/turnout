@@ -698,7 +698,8 @@ function FounderNote({ onBack }) {
 // FIND VIEW
 // ============================================================================
 function FindView({ listings, onSpotTap }) {
-  const allSpots = [...DEMO_SPOTS, ...listings];
+  // Demo spots removed for real launch — DEMO_SPOTS constant kept for screenshots/dev only
+  const allSpots = [...listings];
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: C.white }}>
       <div style={{
@@ -727,7 +728,7 @@ function FindView({ listings, onSpotTap }) {
       </div>
 
       <div style={{ width: '100%', height: 'calc(100% - 180px)', paddingTop: 78 }}>
-        <VanMap spots={DEMO_SPOTS} userListings={listings} onSpotTap={onSpotTap} />
+        <VanMap spots={[]} userListings={listings} onSpotTap={onSpotTap} />
       </div>
 
       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 12 }}>
