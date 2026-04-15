@@ -51,8 +51,16 @@ if (typeof window !== 'undefined' && !window.storage) {
         )
 
         if (toInsert.length > 0) {
+          // RLS requires user_id = auth.uid() on insert. Stamp it here so
+          // App.jsx never has to think about it. If no session, fail loudly
+          // — App.jsx is supposed to gate the Host flow behind login first.
+          const { data: { user } } = await supabase.auth.getUser()
+          if (!user) {
+            console.error('[turnout] cannot insert listing: not signed in')
+            return { value }
+          }
           // Strip client-generated ids so Supabase generates real UUIDs.
-          const rows = toInsert.map(({ id, ...rest }) => rest)
+          const rows = toInsert.map(({ id, ...rest }) => ({ ...rest, user_id: user.id }))
           const { error } = await supabase.from('listings').insert(rows)
           if (error) console.error('[turnout] supabase insert failed:', error.message)
         }

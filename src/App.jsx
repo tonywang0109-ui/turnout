@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Plus, ChevronLeft, Clock, Star, Home, X, Check, Calendar, Minus, ArrowRight, Heart, Share, Search, SlidersHorizontal, Car as CarIcon, Shield, Zap, Lock, Eye, Camera } from 'lucide-react';
+import { supabase } from './supabase';
 
 // ============================================================================
 // DESIGN TOKENS
@@ -1086,13 +1087,22 @@ function BookingConfirm({ booking, onDone }) {
 // ============================================================================
 // HOST VIEW
 // ============================================================================
-function HostView({ listings, onAdd, onSpotTap }) {
+function HostView({ listings, onAdd, onSpotTap, onLogout }) {
   const totalSpots = listings.length;
   const estMonthly = listings.reduce((sum, s) => sum + (s.rate * 5 * 22), 0);
   return (
     <div style={{ minHeight: '100%', backgroundColor: C.white, padding: '24px 20px 100px' }}>
-      <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 700, color: C.amber, letterSpacing: '0.15em', marginBottom: 10 }}>
-        HOST
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 700, color: C.amber, letterSpacing: '0.15em' }}>
+          HOST
+        </div>
+        <button onClick={onLogout} style={{
+          border: 'none', backgroundColor: 'transparent', cursor: 'pointer',
+          fontFamily: '"Inter", sans-serif', fontSize: 12, fontWeight: 600, color: C.inkMute,
+          padding: '4px 8px', letterSpacing: '0.02em',
+        }}>
+          Log out
+        </button>
       </div>
       <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 36, fontWeight: 800, color: C.ink, lineHeight: 1.05, letterSpacing: '-0.03em', marginBottom: 12 }}>
         {totalSpots === 0 ? (<>Your space can<br />earn you money.</>) :
@@ -1331,6 +1341,170 @@ function TripsView({ bookings }) {
 // ============================================================================
 // BOTTOM NAV
 // ============================================================================
+// ============================================================================
+// AUTH (sign up / log in)
+// ============================================================================
+function AuthView({ onCancel, onSuccess }) {
+  const [mode, setMode] = useState('signup');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
+
+  const isSignup = mode === 'signup';
+  const canSubmit = email && password.length >= 6 && !loading;
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setLoading(true);
+    setError('');
+    setInfo('');
+    try {
+      if (isSignup) {
+        const { data, error: e } = await supabase.auth.signUp({ email, password });
+        if (e) { setError(e.message); return; }
+        if (data?.session) {
+          onSuccess();
+        } else {
+          setInfo("Check your email to confirm. Then come back and log in.");
+          setMode('login');
+          setPassword('');
+        }
+      } else {
+        const { error: e } = await supabase.auth.signInWithPassword({ email, password });
+        if (e) { setError(e.message); return; }
+        onSuccess();
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogle = async () => {
+    setError('');
+    setLoading(true);
+    const { error: e } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+    if (e) { setError(e.message); setLoading(false); }
+  };
+
+  const inputStyle = {
+    width: '100%', padding: '14px 16px', fontFamily: '"Inter", sans-serif', fontSize: 15,
+    border: `1px solid ${C.line}`, backgroundColor: C.white, color: C.ink, borderRadius: 12,
+    outline: 'none', boxSizing: 'border-box', fontWeight: 500,
+  };
+  const labelStyle = {
+    fontFamily: '"Inter", sans-serif', fontSize: 11, color: C.inkMute,
+    letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8,
+    display: 'block', fontWeight: 700,
+  };
+
+  return (
+    <div style={{ minHeight: '100%', backgroundColor: C.white, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '16px 16px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <button onClick={onCancel} style={{
+          width: 40, height: 40, border: 'none', backgroundColor: 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+        }}>
+          <X size={24} color={C.ink} strokeWidth={2.2} />
+        </button>
+        <LogoMark size={28} />
+        <div style={{ width: 40 }} />
+      </div>
+
+      <div style={{ padding: '24px 24px 32px', flex: 1 }}>
+        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 700, color: C.amber, letterSpacing: '0.15em', marginBottom: 10 }}>
+          {isSignup ? 'JOIN TURNOUT' : 'WELCOME BACK'}
+        </div>
+        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 32, fontWeight: 800, color: C.ink, lineHeight: 1.05, letterSpacing: '-0.03em', marginBottom: 8 }}>
+          {isSignup ? (
+            <>Start{' '}<span style={{ fontFamily: '"Instrument Serif", serif', fontStyle: 'italic', fontWeight: 400 }}>earning</span>{' '}from your spot.</>
+          ) : (
+            <>Log in to{' '}<span style={{ fontFamily: '"Instrument Serif", serif', fontStyle: 'italic', fontWeight: 400 }}>continue</span>.</>
+          )}
+        </div>
+        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 14, color: C.inkSoft, lineHeight: 1.5, marginBottom: 28 }}>
+          {isSignup
+            ? 'Create an account to list your driveway, condo stall, or garage.'
+            : 'Sign in to manage your listings.'}
+        </div>
+
+        <button onClick={handleGoogle} disabled={loading} style={{
+          width: '100%', backgroundColor: C.white, color: C.ink, border: `1px solid ${C.line}`,
+          padding: '15px 20px', fontFamily: '"Inter", sans-serif', fontSize: 15, fontWeight: 600,
+          cursor: loading ? 'not-allowed' : 'pointer', borderRadius: 12, marginBottom: 20,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+        }}>
+          <span style={{
+            width: 20, height: 20, borderRadius: '50%',
+            backgroundColor: '#4285F4', color: C.white,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: '"Inter", sans-serif', fontSize: 12, fontWeight: 800,
+          }}>G</span>
+          Continue with Google
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+          <div style={{ flex: 1, height: 1, backgroundColor: C.line }} />
+          <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 12, color: C.inkMute, fontWeight: 600 }}>or</div>
+          <div style={{ flex: 1, height: 1, backgroundColor: C.line }} />
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>Email</label>
+          <input
+            style={inputStyle} type="email" autoCapitalize="none" autoCorrect="off"
+            value={email} onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+          />
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <label style={labelStyle}>Password</label>
+          <input
+            style={inputStyle} type="password"
+            value={password} onChange={(e) => setPassword(e.target.value)}
+            placeholder="At least 6 characters"
+          />
+        </div>
+
+        {error && (
+          <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: '#B91C1C', marginTop: 12, padding: '10px 14px', backgroundColor: '#FEE2E2', borderRadius: 10 }}>
+            {error}
+          </div>
+        )}
+        {info && (
+          <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.green, marginTop: 12, padding: '10px 14px', backgroundColor: C.greenSoft, borderRadius: 10 }}>
+            {info}
+          </div>
+        )}
+
+        <button onClick={handleSubmit} disabled={!canSubmit} style={{
+          width: '100%', backgroundColor: canSubmit ? C.ink : C.line, color: C.white, border: 'none',
+          padding: '18px 24px', fontFamily: '"Inter", sans-serif', fontSize: 16, fontWeight: 700,
+          cursor: canSubmit ? 'pointer' : 'not-allowed', borderRadius: 14, marginTop: 20,
+        }}>
+          {loading ? 'Working…' : isSignup ? 'Create account' : 'Log in'}
+        </button>
+
+        <div style={{ textAlign: 'center', marginTop: 20 }}>
+          <span style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.inkSoft }}>
+            {isSignup ? 'Already have an account?' : "Don't have an account?"}
+          </span>{' '}
+          <button onClick={() => { setMode(isSignup ? 'login' : 'signup'); setError(''); setInfo(''); }} style={{
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            fontFamily: '"Inter", sans-serif', fontSize: 13, fontWeight: 700, color: C.amber, padding: 0,
+          }}>
+            {isSignup ? 'Log in' : 'Sign up'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BottomNav({ tab, setTab }) {
   const tabs = [
     { id: 'find', label: 'Explore', Icon: Search },
@@ -1376,6 +1550,29 @@ export default function Turnout() {
   const [listings, setListings] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [session, setSession] = useState(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      setSession(newSession);
+      if (event === 'SIGNED_IN') {
+        setView((current) => {
+          if (current === 'auth') {
+            setTab('host');
+            return 'main';
+          }
+          return current;
+        });
+      }
+      if (event === 'SIGNED_OUT') {
+        setTab('find');
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -1418,7 +1615,17 @@ export default function Turnout() {
     setView('confirm');
   };
   const handleConfirmDone = () => { setView('main'); setTab('trips'); };
-  const handleAddSpot = (spot) => { setListings([...listings, spot]); setView('main'); setTab('host'); };
+  const handleAddSpot = (spot) => {
+    if (!session) { setView('auth'); return; }
+    setListings([...listings, spot]); setView('main'); setTab('host');
+  };
+  const handleSetTab = (newTab) => {
+    if (newTab === 'host' && !session) { setView('auth'); return; }
+    setTab(newTab);
+  };
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
 
   const containerStyle = {
     maxWidth: 440, margin: '0 auto', minHeight: '100vh', backgroundColor: C.white,
@@ -1441,15 +1648,18 @@ export default function Turnout() {
   if (view === 'addSpot') {
     return <div style={containerStyle}><AddSpotForm onCancel={() => setView('main')} onSave={handleAddSpot} /></div>;
   }
+  if (view === 'auth') {
+    return <div style={containerStyle}><AuthView onCancel={() => { setView('main'); setTab('find'); }} onSuccess={() => { setView('main'); setTab('host'); }} /></div>;
+  }
 
   return (
     <div style={containerStyle}>
       <div style={{ flex: 1, position: 'relative', overflow: 'auto', minHeight: 'calc(100vh - 78px)' }}>
         {tab === 'find' && <FindView listings={listings} onSpotTap={handleSpotTap} />}
-        {tab === 'host' && <HostView listings={listings} onAdd={() => setView('addSpot')} onSpotTap={handleSpotTap} />}
+        {tab === 'host' && <HostView listings={listings} onAdd={() => setView('addSpot')} onSpotTap={handleSpotTap} onLogout={handleLogout} />}
         {tab === 'trips' && <TripsView bookings={bookings} />}
       </div>
-      <BottomNav tab={tab} setTab={setTab} />
+      <BottomNav tab={tab} setTab={handleSetTab} />
     </div>
   );
 }
