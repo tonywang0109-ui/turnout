@@ -124,6 +124,101 @@ if (typeof window !== 'undefined' && !window.storage) {
       }
       return true
     },
+
+    // ========================================================================
+    // BOOKINGS
+    // ========================================================================
+    createBooking: async ({ listing_id, host_id, start_time, end_time, total_hours, total_price }) => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        console.error('[turnout] cannot create booking: not signed in')
+        return { error: 'not_signed_in' }
+      }
+      if (user.id === host_id) {
+        return { error: 'cannot_book_own_listing' }
+      }
+      // Conflict check: look for any approved booking on this listing that overlaps
+      const { data: conflicts, error: conflictError } = await supabase
+        .from('bookings')
+        .select('id, start_time, end_time')
+        .eq('listing_id', listing_id)
+        .eq('status', 'approved')
+        .lt('start_time', end_time)
+        .gt('end_time', start_time)
+      if (conflictError) {
+        console.error('[turnout] conflict check failed:', conflictError.message)
+        return { error: 'conflict_check_failed' }
+      }
+      if (conflicts && conflicts.length > 0) {
+        return { error: 'time_conflict' }
+      }
+      const { data, error } = await supabase
+        .from('bookings')
+        .insert({
+          listing_id,
+          renter_id: user.id,
+          host_id,
+          start_time,
+          end_time,
+          total_hours,
+          total_price,
+          status: 'pending',
+        })
+        .select()
+        .single()
+      if (error) {
+        console.error('[turnout] create booking failed:', error.message)
+        return { error: 'insert_failed', detail: error.message }
+      }
+      return { data }
+    },
+
+    updateBookingStatus: async (id, status) => {
+      if (!id || !status) return { error: 'missing_params' }
+      const allowed = ['pending', 'approved', 'declined', 'cancelled']
+      if (!allowed.includes(status)) return { error: 'invalid_status' }
+      const { data, error } = await supabase
+        .from('bookings')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+      if (error) {
+        console.error('[turnout] update booking failed:', error.message)
+        return { error: 'update_failed', detail: error.message }
+      }
+      return { data }
+    },
+
+    fetchMyBookings: async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return []
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*, listing:listings(*)')
+        .eq('renter_id', user.id)
+        .order('created_at', { ascending: false })
+      if (error) {
+        console.error('[turnout] fetch my bookings failed:', error.message)
+        return []
+      }
+      return data || []
+    },
+
+    fetchBookingsForHost: async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return []
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*, listing:listings(*)')
+        .eq('host_id', user.id)
+        .order('created_at', { ascending: false })
+      if (error) {
+        console.error('[turnout] fetch host bookings failed:', error.message)
+        return []
+      }
+      return data || []
+    },
   }
 }
 
