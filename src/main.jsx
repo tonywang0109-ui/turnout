@@ -8,6 +8,11 @@ import { supabase } from './supabase.js'
 // backends: Supabase for shared listings, localStorage for per-device state
 // (bookings, onboarded flag). The shape matches what App.jsx expects:
 // get(key) -> {value} | null, set(key, value) -> {value}, delete(key) -> {deleted}.
+//
+// Plus three explicit single-row methods for the Host edit/delete flow:
+// insertListing, updateListing, deleteListing. These bypass the diff-based
+// set() and let the app manipulate one row at a time. RLS in Supabase
+// enforces ownership; the shim does not need to check.
 
 const LISTINGS_KEY = 'turnout:listings'
 
@@ -23,8 +28,6 @@ if (typeof window !== 'undefined' && !window.storage) {
           console.error('[turnout] supabase read failed:', error.message)
           return { value: '[]' }
         }
-        // App.jsx expects a string it will JSON.parse, so we stringify here
-        // to match the original localStorage contract exactly.
         return { value: JSON.stringify(data || []) }
       }
       const v = localStorage.getItem(key)
@@ -33,8 +36,6 @@ if (typeof window !== 'undefined' && !window.storage) {
 
     set: async (key, value) => {
       if (key === LISTINGS_KEY) {
-        // Accept either a JSON string (App.jsx stringifies before calling) or
-        // a raw array (defensive). Figure out what's new and insert only those.
         let incoming = []
         try {
           if (typeof value === 'string') incoming = JSON.parse(value)
@@ -51,15 +52,11 @@ if (typeof window !== 'undefined' && !window.storage) {
         )
 
         if (toInsert.length > 0) {
-          // RLS requires user_id = auth.uid() on insert. Stamp it here so
-          // App.jsx never has to think about it. If no session, fail loudly
-          // — App.jsx is supposed to gate the Host flow behind login first.
           const { data: { user } } = await supabase.auth.getUser()
           if (!user) {
             console.error('[turnout] cannot insert listing: not signed in')
             return { value }
           }
-          // Strip client-generated ids so Supabase generates real UUIDs.
           const rows = toInsert.map(({ id, ...rest }) => ({ ...rest, user_id: user.id }))
           const { error } = await supabase.from('listings').insert(rows)
           if (error) console.error('[turnout] supabase insert failed:', error.message)
@@ -72,13 +69,60 @@ if (typeof window !== 'undefined' && !window.storage) {
 
     delete: async (key) => {
       if (key === LISTINGS_KEY) {
-        // Refuse to nuke the whole table via the shim. If you need to clear
-        // listings, do it in the Supabase SQL Editor.
-        console.warn('[turnout] delete on turnout:listings is disabled by the shim')
+        console.warn('[turnout] delete on turnout:listings is disabled by the shim. Use deleteListing(id) instead.')
         return { deleted: false }
       }
       localStorage.removeItem(key)
       return { deleted: true }
+    },
+
+    insertListing: async (spot) => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        console.error('[turnout] cannot insert listing: not signed in')
+        return null
+      }
+      const { id, ...rest } = spot || {}
+      const { data, error } = await supabase
+        .from('listings')
+        .insert({ ...rest, user_id: user.id })
+        .select()
+        .single()
+      if (error) {
+        console.error('[turnout] insert listing failed:', error.message)
+        return null
+      }
+      return data
+    },
+
+    updateListing: async (id, patch) => {
+      if (!id) return null
+      const allowed = ['title', 'address', 'rate', 'type', 'available', 'description']
+      const clean = Object.fromEntries(
+        Object.entries(patch || {}).filter(([k]) => allowed.includes(k))
+      )
+      if (Object.keys(clean).length === 0) return null
+      const { data, error } = await supabase
+        .from('listings')
+        .update(clean)
+        .eq('id', id)
+        .select()
+        .single()
+      if (error) {
+        console.error('[turnout] update listing failed:', error.message)
+        return null
+      }
+      return data
+    },
+
+    deleteListing: async (id) => {
+      if (!id) return false
+      const { error } = await supabase.from('listings').delete().eq('id', id)
+      if (error) {
+        console.error('[turnout] delete listing failed:', error.message)
+        return false
+      }
+      return true
     },
   }
 }

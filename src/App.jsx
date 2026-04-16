@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Plus, ChevronLeft, Clock, Star, Home, X, Check, Calendar, Minus, ArrowRight, Heart, Share, Search, SlidersHorizontal, Car as CarIcon, Shield, Zap, Lock, Eye, Camera } from 'lucide-react';
+import { MapPin, Plus, ChevronLeft, Clock, Star, Home, X, Check, Calendar, Minus, ArrowRight, Heart, Share, Search, SlidersHorizontal, Car as CarIcon, Shield, Zap, Lock, Eye, Camera, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from './supabase';
 
 // ============================================================================
@@ -1087,9 +1087,26 @@ function BookingConfirm({ booking, onDone }) {
 // ============================================================================
 // HOST VIEW
 // ============================================================================
-function HostView({ listings, onAdd, onSpotTap, onLogout }) {
-  const totalSpots = listings.length;
-  const estMonthly = listings.reduce((sum, s) => sum + (s.rate * 5 * 22), 0);
+function HostView({ listings, userId, onAdd, onSpotTap, onEdit, onDelete, onLogout }) {
+  const myListings = listings.filter((s) => s.user_id && s.user_id === userId);
+  const totalSpots = myListings.length;
+  const estMonthly = myListings.reduce((sum, s) => sum + (s.rate * 5 * 22), 0);
+  const [pendingDelete, setPendingDelete] = useState(null);
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const id = pendingDelete.id;
+    setPendingDelete(null);
+    await onDelete(id);
+  };
+
+  const actionBtnStyle = {
+    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+    padding: '10px 12px', border: `1px solid ${C.line}`, backgroundColor: C.white,
+    color: C.ink, borderRadius: 10, cursor: 'pointer',
+    fontFamily: '"Inter", sans-serif', fontSize: 13, fontWeight: 600,
+  };
+
   return (
     <div style={{ minHeight: '100%', backgroundColor: C.white, padding: '24px 20px 100px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -1124,34 +1141,50 @@ function HostView({ listings, onAdd, onSpotTap, onLogout }) {
         List a spot
       </button>
 
-      {listings.length > 0 && (
+      {myListings.length > 0 && (
         <div>
           <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 700, color: C.inkMute, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>
             Your listings
           </div>
-          {listings.map((spot) => (
-            <div key={spot.id} onClick={() => onSpotTap(spot)} style={{
-              backgroundColor: C.white, borderRadius: 16, marginBottom: 12, cursor: 'pointer',
+          {myListings.map((spot) => (
+            <div key={spot.id} style={{
+              backgroundColor: C.white, borderRadius: 16, marginBottom: 12,
               overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)',
             }}>
-              <div style={{ height: 140, overflow: 'hidden' }}>
-                <SpotPhoto type={spot.type} variant="a" />
-              </div>
-              <div style={{ padding: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 15, fontWeight: 700, color: C.ink, lineHeight: 1.2 }}>
-                      {spot.title}
+              <div onClick={() => onSpotTap(spot)} style={{ cursor: 'pointer' }}>
+                <div style={{ height: 140, overflow: 'hidden' }}>
+                  <SpotPhoto type={spot.type} variant="a" />
+                </div>
+                <div style={{ padding: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 15, fontWeight: 700, color: C.ink, lineHeight: 1.2 }}>
+                        {spot.title}
+                      </div>
+                      <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 12, color: C.inkMute, marginTop: 4 }}>
+                        {spot.type} · {spot.available}
+                      </div>
                     </div>
-                    <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 12, color: C.inkMute, marginTop: 4 }}>
-                      {spot.type} · {spot.available}
+                    <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 18, fontWeight: 800, color: C.amber }}>
+                      ${spot.rate}
+                      <span style={{ fontSize: 11, color: C.inkMute, fontWeight: 500 }}>/hr</span>
                     </div>
-                  </div>
-                  <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 18, fontWeight: 800, color: C.amber }}>
-                    ${spot.rate}
-                    <span style={{ fontSize: 11, color: C.inkMute, fontWeight: 500 }}>/hr</span>
                   </div>
                 </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, padding: '0 16px 16px' }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onEdit(spot); }}
+                  style={actionBtnStyle}
+                >
+                  <Pencil size={14} strokeWidth={2.2} /> Edit
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setPendingDelete(spot); }}
+                  style={{ ...actionBtnStyle, color: C.heart, borderColor: '#F5C2C2' }}
+                >
+                  <Trash2 size={14} strokeWidth={2.2} /> Delete
+                </button>
               </div>
             </div>
           ))}
@@ -1182,6 +1215,54 @@ function HostView({ listings, onAdd, onSpotTap, onLogout }) {
           ))}
         </div>
       )}
+
+      {pendingDelete && (
+        <div
+          onClick={() => setPendingDelete(null)}
+          style={{
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(23,23,23,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+            zIndex: 1000,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: C.white, borderRadius: 16, padding: 24, maxWidth: 360, width: '100%',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.2)',
+            }}
+          >
+            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 18, fontWeight: 800, color: C.ink, marginBottom: 8 }}>
+              Delete this listing?
+            </div>
+            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 14, color: C.inkSoft, lineHeight: 1.5, marginBottom: 20 }}>
+              "{pendingDelete.title}" will be removed. This can't be undone.
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setPendingDelete(null)}
+                style={{
+                  flex: 1, padding: '14px 16px', border: `1px solid ${C.line}`,
+                  backgroundColor: C.white, color: C.ink, borderRadius: 12, cursor: 'pointer',
+                  fontFamily: '"Inter", sans-serif', fontSize: 14, fontWeight: 600,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                style={{
+                  flex: 1, padding: '14px 16px', border: 'none',
+                  backgroundColor: C.heart, color: C.white, borderRadius: 12, cursor: 'pointer',
+                  fontFamily: '"Inter", sans-serif', fontSize: 14, fontWeight: 700,
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1189,18 +1270,31 @@ function HostView({ listings, onAdd, onSpotTap, onLogout }) {
 // ============================================================================
 // ADD SPOT FORM
 // ============================================================================
-function AddSpotForm({ onCancel, onSave }) {
-  const [title, setTitle] = useState('');
-  const [address, setAddress] = useState('1077 W Cordova St');
-  const [rate, setRate] = useState('5');
-  const [type, setType] = useState('Underground');
-  const [available, setAvailable] = useState('Mon–Fri, 8am–6pm');
-  const [description, setDescription] = useState('');
+function AddSpotForm({ onCancel, onSave, initial = null }) {
+  const isEdit = initial !== null;
+  const [title, setTitle] = useState(initial?.title || '');
+  const [address, setAddress] = useState(initial?.address || '1077 W Cordova St');
+  const [rate, setRate] = useState(String(initial?.rate ?? '5'));
+  const [type, setType] = useState(initial?.type || 'Underground');
+  const [available, setAvailable] = useState(initial?.available || 'Mon–Fri, 8am–6pm');
+  const [description, setDescription] = useState(initial?.description || '');
 
   const canSave = title && address && rate;
 
   const handleSave = () => {
     if (!canSave) return;
+    if (isEdit) {
+      onSave({
+        id: initial.id,
+        title,
+        address,
+        rate: parseFloat(rate),
+        type,
+        available,
+        description,
+      });
+      return;
+    }
     const newSpot = {
       id: uid(), title, neighborhood: 'Coal Harbour', address,
       distance: '0.0 km', rate: parseFloat(rate), type,
@@ -1239,10 +1333,10 @@ function AddSpotForm({ onCancel, onSave }) {
       </div>
       <div style={{ padding: '8px 24px 20px', flex: 1 }}>
         <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 700, color: C.amber, letterSpacing: '0.15em', marginBottom: 10 }}>
-          NEW LISTING
+          {isEdit ? 'EDIT LISTING' : 'NEW LISTING'}
         </div>
         <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 32, fontWeight: 800, color: C.ink, lineHeight: 1.05, letterSpacing: '-0.03em', marginBottom: 28 }}>
-          List a spot.
+          {isEdit ? 'Edit your spot.' : 'List a spot.'}
         </div>
         <div style={{ marginBottom: 20 }}>
           <label style={labelStyle}>What do you call it?</label>
@@ -1279,7 +1373,7 @@ function AddSpotForm({ onCancel, onSave }) {
           padding: '18px 24px', fontFamily: '"Inter", sans-serif', fontSize: 16, fontWeight: 700,
           cursor: canSave ? 'pointer' : 'not-allowed', borderRadius: 14,
         }}>
-          Publish spot
+          {isEdit ? 'Save changes' : 'Publish spot'}
         </button>
       </div>
     </div>
@@ -1551,6 +1645,7 @@ export default function Turnout() {
   const [bookings, setBookings] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [session, setSession] = useState(null);
+  const [editingSpot, setEditingSpot] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -1615,9 +1710,34 @@ export default function Turnout() {
     setView('confirm');
   };
   const handleConfirmDone = () => { setView('main'); setTab('trips'); };
-  const handleAddSpot = (spot) => {
+  const handleAddSpot = async (spot) => {
     if (!session) { setView('auth'); return; }
-    setListings([...listings, spot]); setView('main'); setTab('host');
+    const inserted = await window.storage.insertListing(spot);
+    if (inserted) {
+      setListings([...listings, inserted]);
+    }
+    setView('main'); setTab('host');
+  };
+  const handleEditSpot = (spot) => {
+    setEditingSpot(spot);
+    setView('editSpot');
+  };
+  const handleSaveEdit = async (patch) => {
+    const { id, ...fields } = patch;
+    const updated = await window.storage.updateListing(id, fields);
+    if (updated) {
+      setListings(listings.map((l) => (l.id === id ? { ...l, ...updated } : l)));
+    } else {
+      setListings(listings.map((l) => (l.id === id ? { ...l, ...fields } : l)));
+    }
+    setEditingSpot(null);
+    setView('main'); setTab('host');
+  };
+  const handleDeleteSpot = async (id) => {
+    const ok = await window.storage.deleteListing(id);
+    if (ok) {
+      setListings(listings.filter((l) => l.id !== id));
+    }
   };
   const handleSetTab = (newTab) => {
     if (newTab === 'host' && !session) { setView('auth'); return; }
@@ -1648,6 +1768,9 @@ export default function Turnout() {
   if (view === 'addSpot') {
     return <div style={containerStyle}><AddSpotForm onCancel={() => setView('main')} onSave={handleAddSpot} /></div>;
   }
+  if (view === 'editSpot' && editingSpot) {
+    return <div style={containerStyle}><AddSpotForm initial={editingSpot} onCancel={() => { setEditingSpot(null); setView('main'); setTab('host'); }} onSave={handleSaveEdit} /></div>;
+  }
   if (view === 'auth') {
     return <div style={containerStyle}><AuthView onCancel={() => { setView('main'); setTab('find'); }} onSuccess={() => { setView('main'); setTab('host'); }} /></div>;
   }
@@ -1656,7 +1779,7 @@ export default function Turnout() {
     <div style={containerStyle}>
       <div style={{ flex: 1, position: 'relative', overflow: 'auto', minHeight: 'calc(100vh - 78px)' }}>
         {tab === 'find' && <FindView listings={listings} onSpotTap={handleSpotTap} />}
-        {tab === 'host' && <HostView listings={listings} onAdd={() => setView('addSpot')} onSpotTap={handleSpotTap} onLogout={handleLogout} />}
+        {tab === 'host' && <HostView listings={listings} userId={session?.user?.id} onAdd={() => setView('addSpot')} onSpotTap={handleSpotTap} onEdit={handleEditSpot} onDelete={handleDeleteSpot} onLogout={handleLogout} />}
         {tab === 'trips' && <TripsView bookings={bookings} />}
       </div>
       <BottomNav tab={tab} setTab={handleSetTab} />
