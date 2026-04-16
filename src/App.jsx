@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapPin, Plus, ChevronLeft, Clock, Star, Home, X, Check, Calendar, Minus, ArrowRight, Heart, Share, Search, SlidersHorizontal, Car as CarIcon, Shield, Zap, Lock, Eye, Camera, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from './supabase';
 
@@ -360,7 +360,6 @@ function VanMap({ spots, userListings, onSpotTap }) {
     scr.onload = () => setLeafletReady(true);
     scr.onerror = () => console.error('[turnout] leaflet failed to load');
     document.head.appendChild(scr);
-    // Inject pulse animation
     if (!document.getElementById('turnout-map-css')) {
       const s = document.createElement('style');
       s.id = 'turnout-map-css';
@@ -395,7 +394,6 @@ function VanMap({ spots, userListings, onSpotTap }) {
     }).addTo(map);
 
     mapObjRef.current = map;
-    // Let Leaflet recalculate size after layout settles
     setTimeout(() => map.invalidateSize(), 200);
   }, [leafletReady]);
 
@@ -433,7 +431,7 @@ function VanMap({ spots, userListings, onSpotTap }) {
       markersRef.current.push(m);
     });
 
-    // Fit bounds only on first load — after that user controls the view
+    // Fit bounds only on first load
     if (allPins.length > 0 && !initialFitRef.current) {
       const bounds = allPins.map(s => toLatLng(s));
       map.fitBounds(bounds, { padding: [60, 40], maxZoom: 15 });
