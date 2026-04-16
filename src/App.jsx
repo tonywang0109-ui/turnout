@@ -328,6 +328,7 @@ function VanMap({ spots, userListings, onSpotTap }) {
   const mapRef = useRef(null);
   const mapObjRef = useRef(null);
   const markersRef = useRef([]);
+  const initialFitRef = useRef(false);
   const [leafletReady, setLeafletReady] = useState(false);
 
   const allPins = [
@@ -374,11 +375,12 @@ function VanMap({ spots, userListings, onSpotTap }) {
     const L = window.L;
     const map = L.map(mapRef.current, {
       center: [49.2895, -123.1216],
-      zoom: 15,
-      zoomControl: false,
+      zoom: 14,
+      minZoom: 12,
+      zoomControl: true,
       attributionControl: false,
     });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
     }).addTo(map);
 
@@ -431,10 +433,11 @@ function VanMap({ spots, userListings, onSpotTap }) {
       markersRef.current.push(m);
     });
 
-    // Fit bounds if there are pins
-    if (allPins.length > 0) {
+    // Fit bounds only on first load — after that user controls the view
+    if (allPins.length > 0 && !initialFitRef.current) {
       const bounds = allPins.map(s => toLatLng(s));
-      map.fitBounds(bounds, { padding: [60, 40], maxZoom: 16 });
+      map.fitBounds(bounds, { padding: [60, 40], maxZoom: 15 });
+      initialFitRef.current = true;
     }
   });
 
