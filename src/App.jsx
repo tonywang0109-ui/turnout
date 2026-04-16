@@ -325,129 +325,195 @@ function SpotPhoto({ type, variant = 'a', withCameraBadge = false }) {
 // VANCOUVER MAP
 // ============================================================================
 function VanMap({ spots, userListings, onSpotTap }) {
-  const mapRef = useRef(null);
-  const mapObjRef = useRef(null);
-  const markersRef = useRef([]);
-  const initialFitRef = useRef(false);
-  const [leafletReady, setLeafletReady] = useState(false);
-
   const allPins = [
     ...spots.map(s => ({ ...s, isUser: false })),
     ...userListings.map(s => ({ ...s, isUser: true })),
   ];
 
-  // Convert legacy SVG pixel coords to real lat/lng.
-  // Anchor: SVG (245, 215) = Coal Harbour center (49.2895, -123.1216).
-  const toLatLng = (spot) => {
-    if (spot.lat && spot.lng) return [spot.lat, spot.lng];
-    const svgX = spot.x ?? 245;
-    const svgY = spot.y ?? 215;
-    return [
-      49.2895 - (svgY - 215) * 0.000055,
-      -123.1216 + (svgX - 245) * 0.000065,
-    ];
-  };
+  return (
+    <svg viewBox="0 0 400 640" style={{ width: '100%', height: '100%', display: 'block' }}>
+      <rect width="400" height="640" fill={C.mapBg} />
 
-  // Load Leaflet from CDN once
-  useEffect(() => {
-    if (window.L) { setLeafletReady(true); return; }
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    document.head.appendChild(link);
-    const scr = document.createElement('script');
-    scr.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    scr.onload = () => setLeafletReady(true);
-    scr.onerror = () => console.error('[turnout] leaflet failed to load');
-    document.head.appendChild(scr);
-    if (!document.getElementById('turnout-map-css')) {
-      const s = document.createElement('style');
-      s.id = 'turnout-map-css';
-      s.textContent = '@keyframes turnoutPulse{0%{transform:scale(1);opacity:0.4}100%{transform:scale(2.8);opacity:0}}.leaflet-container{font-family:Inter,sans-serif!important}';
-      document.head.appendChild(s);
-    }
-  }, []);
+      <path d="M 0 0 L 400 0 L 400 165 Q 340 178 280 172 Q 220 168 160 160 Q 80 150 0 175 Z" fill={C.mapWater} />
+      <g opacity="0.4">
+        <path d="M 40 80 Q 100 75 160 82 T 320 78" stroke="#FFFFFF" strokeWidth="0.8" fill="none" />
+        <path d="M 60 100 Q 120 95 180 102 T 340 98" stroke="#FFFFFF" strokeWidth="0.8" fill="none" />
+        <path d="M 30 125 Q 90 120 150 127 T 310 122" stroke="#FFFFFF" strokeWidth="0.8" fill="none" />
+      </g>
+      <text x="200" y="60" textAnchor="middle" fontFamily="Inter, sans-serif" fontSize="10" fontWeight="600" fill="#4A6B7A" letterSpacing="0.3em">
+        BURRARD INLET
+      </text>
 
-  // Initialise map once Leaflet + DOM ready
-  useEffect(() => {
-    if (!leafletReady || !mapRef.current || mapObjRef.current) return;
-    const L = window.L;
-    const map = L.map(mapRef.current, {
-      center: [49.2895, -123.1216],
-      zoom: 14,
-      minZoom: 12,
-      zoomControl: true,
-      attributionControl: false,
-    });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-    }).addTo(map);
+      <path
+        d="M -40 100 Q -20 80 20 90 Q 60 100 70 140 Q 75 180 40 220 Q 10 250 -30 260 Q -50 240 -50 200 Z"
+        fill={C.mapPark}
+      />
+      <path
+        d="M -40 100 Q -20 80 20 90 Q 60 100 70 140 Q 75 180 40 220 Q 10 250 -30 260 Q -50 240 -50 200 Z"
+        fill={C.mapParkDark}
+        opacity="0.3"
+      />
+      {[
+        [0, 160], [15, 180], [-10, 200], [25, 210], [-20, 150], [35, 175],
+        [5, 140], [-5, 220], [20, 195],
+      ].map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r="3" fill={C.mapParkDark} opacity="0.5" />
+      ))}
+      <text x="10" y="170" fontFamily="Inter, sans-serif" fontSize="9" fontWeight="600" fill="#3A5540" letterSpacing="0.05em">
+        Stanley
+      </text>
+      <text x="10" y="182" fontFamily="Inter, sans-serif" fontSize="9" fontWeight="600" fill="#3A5540" letterSpacing="0.05em">
+        Park
+      </text>
 
-    // Pulsing "you are here" dot
-    const dotHtml = '<div style="position:relative;width:28px;height:28px">'
-      + '<div style="position:absolute;inset:0;border-radius:50%;background:#D97706;animation:turnoutPulse 2s ease-out infinite"></div>'
-      + '<div style="position:absolute;top:7px;left:7px;width:14px;height:14px;border-radius:50%;background:#D97706;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3)"></div>'
-      + '</div>';
-    L.marker([49.2895, -123.1216], {
-      icon: L.divIcon({ className: '', html: dotHtml, iconSize: [28, 28], iconAnchor: [14, 14] }),
-      interactive: false, zIndexOffset: -100,
-    }).addTo(map);
+      <g>
+        {[
+          [60, 240, 28, 28], [95, 240, 32, 25], [135, 240, 28, 28], [170, 240, 30, 28],
+          [210, 240, 28, 28], [250, 240, 32, 28], [290, 240, 28, 28], [325, 240, 30, 28],
+          [55, 295, 32, 28], [95, 295, 28, 30], [130, 295, 32, 28], [170, 295, 30, 30],
+          [210, 295, 32, 28], [250, 295, 28, 30], [285, 295, 32, 28], [325, 295, 28, 30],
+          [50, 350, 30, 28], [90, 350, 32, 30], [130, 350, 28, 28], [165, 350, 32, 30],
+          [205, 350, 30, 28], [245, 350, 32, 30], [285, 350, 28, 28], [320, 350, 32, 30],
+          [45, 405, 32, 30], [85, 405, 28, 28], [120, 405, 32, 30], [160, 405, 30, 28],
+          [200, 405, 32, 30], [240, 405, 28, 28], [275, 405, 32, 30], [315, 405, 30, 28],
+          [40, 460, 30, 32], [80, 460, 32, 28], [120, 460, 28, 32], [155, 460, 32, 28],
+          [195, 460, 30, 32], [235, 460, 32, 28], [275, 460, 28, 32], [310, 460, 32, 28],
+          [35, 515, 32, 30], [75, 515, 28, 32], [115, 515, 32, 28], [150, 515, 30, 32],
+          [190, 515, 32, 28], [230, 515, 28, 32], [270, 515, 32, 28], [305, 515, 30, 32],
+        ].map(([x, y, w, h], i) => (
+          <g key={i}>
+            <rect x={x + 1.5} y={y + 1.5} width={w} height={h} fill={C.mapBuildingShadow} />
+            <rect x={x} y={y} width={w} height={h} fill={C.mapBuilding} />
+          </g>
+        ))}
+      </g>
 
-    mapObjRef.current = map;
-    setTimeout(() => map.invalidateSize(), 200);
-  }, [leafletReady]);
+      <g>
+        {[
+          { y: 200, name: 'W Cordova St', major: false },
+          { y: 228, name: 'W Hastings St', major: true },
+          { y: 283, name: 'W Pender St', major: false },
+          { y: 338, name: 'Dunsmuir St', major: false },
+          { y: 393, name: 'W Georgia St', major: true },
+          { y: 448, name: 'Robson St', major: true },
+          { y: 503, name: 'Smithe St', major: false },
+          { y: 558, name: 'Nelson St', major: false },
+          { y: 608, name: 'Pacific Blvd', major: false },
+        ].map(({ y, name, major }) => (
+          <g key={y}>
+            <line x1="-10" y1={y} x2="410" y2={y - 8} stroke={C.mapRoad} strokeWidth={major ? 9 : 6} />
+            {major && (
+              <line x1="-10" y1={y} x2="410" y2={y - 8} stroke={C.mapRoadLine} strokeWidth="0.5" strokeDasharray="12,8" />
+            )}
+            <text
+              x="10"
+              y={y - 3}
+              fontFamily="Inter, sans-serif"
+              fontSize="7"
+              fontWeight={major ? 700 : 600}
+              fill={major ? "#4A4A4A" : "#8A8A8A"}
+              letterSpacing="0.02em"
+            >
+              {name}
+            </text>
+          </g>
+        ))}
+      </g>
 
-  // Sync price-pill markers whenever pins change
-  useEffect(() => {
-    const map = mapObjRef.current;
-    if (!map || !leafletReady) return;
-    const L = window.L;
+      <g>
+        {[
+          { x: 90, name: 'Bute', major: false },
+          { x: 145, name: 'Thurlow', major: false },
+          { x: 200, name: 'Burrard', major: true },
+          { x: 255, name: 'Hornby', major: false },
+          { x: 310, name: 'Howe', major: false },
+          { x: 360, name: 'Granville', major: true },
+        ].map(({ x, name, major }) => (
+          <g key={x}>
+            <line x1={x} y1="180" x2={x + 30} y2="640" stroke={C.mapRoad} strokeWidth={major ? 9 : 6} />
+            {major && (
+              <text
+                x={x + 5}
+                y="640"
+                fontFamily="Inter, sans-serif"
+                fontSize="7"
+                fontWeight="700"
+                fill="#4A4A4A"
+                letterSpacing="0.02em"
+              >
+                {name} St
+              </text>
+            )}
+          </g>
+        ))}
+      </g>
 
-    markersRef.current.forEach(m => map.removeLayer(m));
-    markersRef.current = [];
+      <g>
+        <rect x="235" y="185" width="60" height="20" fill={C.white} stroke="#C8C4BB" strokeWidth="1" />
+        <path d="M 240 185 Q 248 170 256 185" fill={C.white} stroke="#C8C4BB" strokeWidth="1" />
+        <path d="M 255 185 Q 263 170 271 185" fill={C.white} stroke="#C8C4BB" strokeWidth="1" />
+        <path d="M 270 185 Q 278 170 286 185" fill={C.white} stroke="#C8C4BB" strokeWidth="1" />
+        <text x="265" y="198" textAnchor="middle" fontFamily="Inter, sans-serif" fontSize="6" fontWeight="700" fill="#4A4A4A">
+          CANADA PL
+        </text>
+      </g>
 
-    allPins.forEach(spot => {
-      const [lat, lng] = toLatLng(spot);
-      const isOwn = spot.isUser;
-      const pill = '<div style="'
-        + 'display:inline-flex;align-items:center;justify-content:center;'
-        + 'min-width:46px;height:28px;padding:0 12px;'
-        + 'background:' + (isOwn ? '#D97706' : '#FFFFFF') + ';'
-        + 'color:' + (isOwn ? '#FFFFFF' : '#171717') + ';'
-        + 'border:1.5px solid ' + (isOwn ? '#D97706' : '#171717') + ';'
-        + 'border-radius:14px;font-family:Inter,sans-serif;font-size:13px;font-weight:700;'
-        + 'box-shadow:0 2px 8px rgba(0,0,0,0.18);white-space:nowrap;cursor:pointer;'
-        + 'transition:transform 0.15s ease'
-        + '">$' + spot.rate + '</div>';
+      <text x="130" y="260" fontFamily="Inter, sans-serif" fontSize="10" fontWeight="700" fill="#8A8A8A" letterSpacing="0.2em" opacity="0.5">
+        COAL HARBOUR
+      </text>
+      <text x="85" y="420" fontFamily="Inter, sans-serif" fontSize="9" fontWeight="700" fill="#8A8A8A" letterSpacing="0.2em" opacity="0.5">
+        WEST END
+      </text>
+      <text x="200" y="550" fontFamily="Inter, sans-serif" fontSize="9" fontWeight="700" fill="#8A8A8A" letterSpacing="0.2em" opacity="0.5">
+        DOWNTOWN
+      </text>
+      <text x="285" y="595" fontFamily="Inter, sans-serif" fontSize="9" fontWeight="700" fill="#8A8A8A" letterSpacing="0.2em" opacity="0.5">
+        YALETOWN
+      </text>
 
-      const icon = L.divIcon({
-        className: '',
-        html: pill,
-        iconSize: [52, 28],
-        iconAnchor: [26, 14],
-      });
-      const m = L.marker([lat, lng], { icon }).addTo(map);
-      m.on('click', () => onSpotTap(spot));
-      markersRef.current.push(m);
-    });
+      <g>
+        <circle cx="245" cy="215" r="24" fill={C.amber} opacity="0.15">
+          <animate attributeName="r" from="16" to="30" dur="2s" repeatCount="indefinite" />
+          <animate attributeName="opacity" from="0.3" to="0" dur="2s" repeatCount="indefinite" />
+        </circle>
+        <circle cx="245" cy="215" r="8" fill={C.amber} stroke={C.white} strokeWidth="3" />
+      </g>
 
-    // Fit bounds only on first load
-    if (allPins.length > 0 && !initialFitRef.current) {
-      const bounds = allPins.map(s => toLatLng(s));
-      map.fitBounds(bounds, { padding: [60, 40], maxZoom: 15 });
-      initialFitRef.current = true;
-    }
-  });
+      {allPins.map((spot) => (
+        <g key={spot.id} style={{ cursor: 'pointer' }} onClick={() => onSpotTap(spot)}>
+          <ellipse cx={spot.x + 1} cy={spot.y + 16} rx="26" ry="3" fill={C.ink} opacity="0.2" />
+          <rect
+            x={spot.x - 24}
+            y={spot.y - 12}
+            width="48"
+            height="24"
+            rx="12"
+            fill={spot.isUser ? C.amber : C.white}
+            stroke={spot.isUser ? C.amber : C.ink}
+            strokeWidth="1.5"
+          />
+          <text
+            x={spot.x}
+            y={spot.y + 4}
+            textAnchor="middle"
+            fontFamily="Inter, sans-serif"
+            fontSize="12"
+            fontWeight="700"
+            fill={spot.isUser ? C.white : C.ink}
+          >
+            ${spot.rate}
+          </text>
+        </g>
+      ))}
 
-  if (!leafletReady) {
-    return (
-      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F2EFE9' }}>
-        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: '#8A8A8A' }}>Loading map...</div>
-      </div>
-    );
-  }
-
-  return <div ref={mapRef} style={{ width: '100%', height: '100%', background: '#F2EFE9' }} />;
+      <g transform="translate(320, 620)">
+        <rect x="-42" y="-11" width="84" height="16" rx="8" fill="rgba(23,23,23,0.55)" />
+        <text x="0" y="0" textAnchor="middle" fontFamily="Inter, sans-serif" fontSize="8" fontWeight="600" fill={C.white} letterSpacing="0.1em">
+          REAL MAP ON LAUNCH
+        </text>
+      </g>
+    </svg>
+  );
 }
 
 // ============================================================================
@@ -636,7 +702,7 @@ function FindView({ listings, onSpotTap }) {
   // Demo spots removed for real launch — DEMO_SPOTS constant kept for screenshots/dev only
   const allSpots = [...listings];
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100vh', backgroundColor: C.white }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: C.white }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
         padding: '16px 16px 12px',
