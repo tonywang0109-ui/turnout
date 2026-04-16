@@ -974,7 +974,7 @@ function MiniSpotCard({ spot, onTap }) {
 // ============================================================================
 // SPOT DETAIL
 // ============================================================================
-function SpotDetail({ spot, onBack, onBook }) {
+function SpotDetail({ spot, onBack, onReserve }) {
   const [hours, setHours] = useState(2);
   const [galleryIdx, setGalleryIdx] = useState(0);
   const total = (spot.rate * hours).toFixed(2);
@@ -1189,12 +1189,12 @@ function SpotDetail({ spot, onBack, onBook }) {
             ${spot.rate} × {hours} {hours === 1 ? 'hour' : 'hours'}
           </div>
         </div>
-        <button onClick={() => onBook({ ...spot, hours, total })} style={{
+        <button onClick={() => onReserve({ spot, initialHours: hours })} style={{
           backgroundColor: C.ink, color: C.white, border: 'none',
           padding: '16px 28px', fontFamily: '"Inter", sans-serif', fontSize: 15, fontWeight: 700,
           cursor: 'pointer', borderRadius: 12, letterSpacing: '-0.01em',
         }}>
-          Reserve
+          Request to book
         </button>
       </div>
     </div>
@@ -1204,34 +1204,224 @@ function SpotDetail({ spot, onBack, onBook }) {
 // ============================================================================
 // CONFIRMATION
 // ============================================================================
-function BookingConfirm({ booking, onDone }) {
+// ============================================================================
+// STATUS PILL (shared by Trips/Host bookings)
+// ============================================================================
+function StatusPill({ status }) {
+  const map = {
+    pending: { bg: C.amberSoft, fg: C.amber, label: 'Pending' },
+    approved: { bg: C.greenSoft, fg: C.green, label: 'Approved' },
+    declined: { bg: '#FEE2E2', fg: '#B91C1C', label: 'Declined' },
+    cancelled: { bg: '#F3F4F6', fg: C.inkMute, label: 'Cancelled' },
+  };
+  const s = map[status] || map.pending;
+  return (
+    <span style={{
+      backgroundColor: s.bg, color: s.fg,
+      fontFamily: '"Inter", sans-serif', fontSize: 10, fontWeight: 700,
+      letterSpacing: '0.08em', textTransform: 'uppercase',
+      padding: '4px 10px', borderRadius: 100,
+    }}>{s.label}</span>
+  );
+}
+
+// ============================================================================
+// BOOKING REQUEST FORM (datetime pickers + submit)
+// ============================================================================
+function BookingRequestForm({ spot, initialHours = 2, onCancel, onSubmit }) {
+  // Default: start at next whole hour from now, end = start + initialHours
+  const now = new Date();
+  const defaultStart = new Date(now);
+  defaultStart.setMinutes(0, 0, 0);
+  defaultStart.setHours(defaultStart.getHours() + 1);
+  const defaultEnd = new Date(defaultStart.getTime() + initialHours * 60 * 60 * 1000);
+
+  const toLocalInput = (d) => {
+    // YYYY-MM-DDTHH:mm in local time (format for <input type="datetime-local">)
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const [startStr, setStartStr] = useState(toLocalInput(defaultStart));
+  const [endStr, setEndStr] = useState(toLocalInput(defaultEnd));
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  const start = new Date(startStr);
+  const end = new Date(endStr);
+  const msDiff = end.getTime() - start.getTime();
+  const hours = msDiff > 0 ? msDiff / (1000 * 60 * 60) : 0;
+  const days = hours / 24;
+  const isDaily = hours >= 24;
+  const totalHours = Math.max(0, Number(hours.toFixed(2)));
+  const totalPrice = Number((spot.rate * totalHours).toFixed(2));
+  const canSubmit = totalHours > 0 && start.getTime() > Date.now() - 60 * 1000 && !submitting;
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    const result = await onSubmit({
+      listing_id: spot.id,
+      host_id: spot.user_id,
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      total_hours: totalHours,
+      total_price: totalPrice,
+      _spot: spot,
+    });
+    if (result?.error) {
+      setError(result.error);
+      setSubmitting(false);
+    }
+    // On success the parent navigates away.
+  };
+
+  const inputStyle = {
+    width: '100%', padding: '14px 16px', fontFamily: '"Inter", sans-serif', fontSize: 15,
+    border: `1px solid ${C.line}`, backgroundColor: C.white, color: C.ink, borderRadius: 12,
+    outline: 'none', boxSizing: 'border-box', fontWeight: 500,
+  };
+  const labelStyle = {
+    fontFamily: '"Inter", sans-serif', fontSize: 11, color: C.inkMute,
+    letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8,
+    display: 'block', fontWeight: 700,
+  };
+
+  const errorMsg = {
+    not_signed_in: 'You need to sign in to book. Go to the Host tab to sign in, then try again.',
+    cannot_book_own_listing: "You can't book your own listing.",
+    time_conflict: 'Someone else already has this spot booked during that window.',
+    conflict_check_failed: "Couldn't check availability. Try again.",
+    insert_failed: 'Could not create the booking. Try again.',
+  }[error] || (error ? `Something went wrong: ${error}` : null);
+
+  return (
+    <div style={{ minHeight: '100%', backgroundColor: C.white, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={onCancel} style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}>
+          <ChevronLeft size={24} color={C.ink} strokeWidth={2} />
+        </button>
+        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 16, fontWeight: 700, color: C.ink }}>
+          Request to book
+        </div>
+      </div>
+
+      <div style={{ flex: 1, padding: '20px', overflowY: 'auto' }}>
+        <div style={{ backgroundColor: C.bg, padding: 16, borderRadius: 12, marginBottom: 24 }}>
+          <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 14, fontWeight: 700, color: C.ink, marginBottom: 2 }}>
+            {spot.title}
+          </div>
+          <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 12, color: C.inkMute }}>
+            {spot.address} · ${spot.rate}/hr
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <label style={labelStyle}>Start</label>
+          <input type="datetime-local" value={startStr} onChange={(e) => setStartStr(e.target.value)} style={inputStyle} />
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <label style={labelStyle}>End</label>
+          <input type="datetime-local" value={endStr} onChange={(e) => setEndStr(e.target.value)} style={inputStyle} />
+        </div>
+
+        <div style={{ backgroundColor: C.bg, padding: 16, borderRadius: 12, marginBottom: 16 }}>
+          {hours > 0 ? (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.inkSoft }}>Duration</span>
+                <span style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.ink, fontWeight: 700 }}>
+                  {isDaily ? `${days.toFixed(1)} days (${totalHours} hr)` : `${totalHours} ${totalHours === 1 ? 'hour' : 'hours'}`}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.inkSoft }}>Rate</span>
+                <span style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.ink, fontWeight: 700 }}>${spot.rate}/hr</span>
+              </div>
+              <div style={{ height: 1, backgroundColor: C.line, margin: '12px 0' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontFamily: '"Inter", sans-serif', fontSize: 15, color: C.ink, fontWeight: 700 }}>Total</span>
+                <span style={{ fontFamily: '"Inter", sans-serif', fontSize: 18, color: C.ink, fontWeight: 800 }}>${totalPrice}</span>
+              </div>
+            </>
+          ) : (
+            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.inkMute }}>
+              End time must be after start time.
+            </div>
+          )}
+        </div>
+
+        {errorMsg && (
+          <div style={{
+            backgroundColor: '#FEE2E2', color: '#B91C1C', padding: 12, borderRadius: 10,
+            fontFamily: '"Inter", sans-serif', fontSize: 13, marginBottom: 16,
+          }}>
+            {errorMsg}
+          </div>
+        )}
+
+        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 12, color: C.inkMute, lineHeight: 1.5, marginBottom: 16 }}>
+          The host will review your request. You'll see the status update in <strong style={{ color: C.ink }}>Trips</strong>. Payment is handled between you and the host directly.
+        </div>
+      </div>
+
+      <div style={{ padding: '14px 20px', borderTop: `1px solid ${C.line}`, backgroundColor: C.white }}>
+        <button
+          onClick={handleSubmit}
+          disabled={!canSubmit}
+          style={{
+            width: '100%',
+            backgroundColor: canSubmit ? C.ink : C.line,
+            color: canSubmit ? C.white : C.inkMute,
+            border: 'none',
+            padding: '16px 28px', fontFamily: '"Inter", sans-serif', fontSize: 15, fontWeight: 700,
+            cursor: canSubmit ? 'pointer' : 'not-allowed', borderRadius: 12,
+          }}
+        >
+          {submitting ? 'Sending…' : 'Send request'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// BOOKING REQUEST SENT (confirmation after successful submit)
+// ============================================================================
+function BookingRequestSent({ booking, onDone }) {
+  const start = new Date(booking.start_time);
+  const end = new Date(booking.end_time);
+  const fmtDT = (d) => d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
   return (
     <div style={{ minHeight: '100%', backgroundColor: C.white, display: 'flex', flexDirection: 'column', padding: '60px 24px 24px' }}>
       <div style={{ flex: 1 }}>
         <div style={{
-          width: 72, height: 72, borderRadius: '50%', backgroundColor: C.green,
+          width: 72, height: 72, borderRadius: '50%', backgroundColor: C.amber,
           display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 28,
         }}>
-          <Check size={36} color={C.white} strokeWidth={2.5} />
+          <Clock size={36} color={C.white} strokeWidth={2.5} />
         </div>
         <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 700, color: C.amber, letterSpacing: '0.15em', marginBottom: 10 }}>
-          RESERVED
+          REQUEST SENT
         </div>
         <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 40, fontWeight: 800, color: C.ink, lineHeight: 1, letterSpacing: '-0.03em', marginBottom: 24 }}>
-          You're parked.
+          Waiting on the host.
         </div>
         <div style={{ backgroundColor: C.bg, padding: 20, borderRadius: 16, marginBottom: 20 }}>
           <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, color: C.inkMute, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4, fontWeight: 600 }}>
-            {booking.title}
+            {booking._spot?.title || 'Listing'}
           </div>
           <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 14, color: C.ink, marginBottom: 14 }}>
-            {booking.address}
+            {booking._spot?.address}
           </div>
           <div style={{ height: 1, backgroundColor: C.line, marginBottom: 14 }} />
           {[
-            ['Duration', `${booking.hours} ${booking.hours === 1 ? 'hour' : 'hours'}`],
-            ['Host', booking.host],
-            ['Total paid', `$${booking.total}`],
+            ['Start', fmtDT(start)],
+            ['End', fmtDT(end)],
+            ['Duration', `${booking.total_hours} hr`],
+            ['Total', `$${booking.total_price}`],
           ].map(([k, v], i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
               <span style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.inkSoft }}>{k}</span>
@@ -1240,7 +1430,7 @@ function BookingConfirm({ booking, onDone }) {
           ))}
         </div>
         <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 12, lineHeight: 1.5, color: C.inkMute }}>
-          Prototype: no real payment was processed. Your reservation is saved under <strong style={{ color: C.ink }}>Trips</strong>.
+          The host has to approve or decline. You'll see updates under <strong style={{ color: C.ink }}>Trips</strong>. You can cancel the request anytime before it's approved.
         </div>
       </div>
       <button onClick={onDone} style={{
@@ -1257,7 +1447,143 @@ function BookingConfirm({ booking, onDone }) {
 // ============================================================================
 // HOST VIEW
 // ============================================================================
-function HostView({ listings, userId, onAdd, onSpotTap, onEdit, onDelete, onLogout }) {
+// ============================================================================
+// HOST BOOKINGS LIST (shown inside HostView)
+// ============================================================================
+function HostBookingsList({ userId, refreshKey, onUpdate }) {
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    async function load() {
+      setLoading(true);
+      if (!userId) {
+        if (alive) { setBookings([]); setLoading(false); }
+        return;
+      }
+      const data = await window.storage.fetchBookingsForHost();
+      if (alive) {
+        setBookings(data || []);
+        setLoading(false);
+      }
+    }
+    load();
+    return () => { alive = false; };
+  }, [userId, refreshKey]);
+
+  const fmtDT = (iso) => new Date(iso).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  });
+
+  const handleAction = async (id, newStatus) => {
+    setBusyId(id);
+    const result = await window.storage.updateBookingStatus(id, newStatus);
+    setBusyId(null);
+    if (result?.data) {
+      setBookings((bs) => bs.map((b) => (b.id === id ? { ...b, status: newStatus } : b)));
+      if (onUpdate) onUpdate();
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ marginTop: 32 }}>
+        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 700, color: C.inkMute, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>
+          Bookings
+        </div>
+        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.inkMute }}>Loading…</div>
+      </div>
+    );
+  }
+
+  if (bookings.length === 0) return null;
+
+  const pending = bookings.filter((b) => b.status === 'pending');
+  const other = bookings.filter((b) => b.status !== 'pending');
+  const btnPrimary = {
+    flex: 1, padding: '10px 12px', border: 'none',
+    backgroundColor: C.green, color: C.white, borderRadius: 10, cursor: 'pointer',
+    fontFamily: '"Inter", sans-serif', fontSize: 13, fontWeight: 700,
+  };
+  const btnSecondary = {
+    flex: 1, padding: '10px 12px', border: `1px solid ${C.line}`,
+    backgroundColor: C.white, color: C.ink, borderRadius: 10, cursor: 'pointer',
+    fontFamily: '"Inter", sans-serif', fontSize: 13, fontWeight: 600,
+  };
+
+  const renderCard = (b) => {
+    const listing = b.listing || {};
+    const canApproveDecline = b.status === 'pending';
+    const canCancel = b.status === 'approved';
+    const busy = busyId === b.id;
+    return (
+      <div key={b.id} style={{
+        backgroundColor: C.white, borderRadius: 16, marginBottom: 12, padding: 16,
+        boxShadow: '0 2px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 15, fontWeight: 700, color: C.ink, lineHeight: 1.2 }}>
+              {listing.title || 'Your listing'}
+            </div>
+            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 12, color: C.inkMute, marginTop: 2 }}>
+              {listing.address}
+            </div>
+          </div>
+          <StatusPill status={b.status} />
+        </div>
+        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.inkSoft, marginBottom: 4 }}>
+          {fmtDT(b.start_time)} → {fmtDT(b.end_time)}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.ink, fontWeight: 700 }}>
+          <span>{b.total_hours} hr</span>
+          <span>${b.total_price}</span>
+        </div>
+        {(canApproveDecline || canCancel) && (
+          <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+            {canApproveDecline && (
+              <>
+                <button disabled={busy} onClick={() => handleAction(b.id, 'declined')} style={btnSecondary}>Decline</button>
+                <button disabled={busy} onClick={() => handleAction(b.id, 'approved')} style={btnPrimary}>
+                  {busy ? '…' : 'Approve'}
+                </button>
+              </>
+            )}
+            {canCancel && (
+              <button disabled={busy} onClick={() => handleAction(b.id, 'cancelled')} style={btnSecondary}>
+                {busy ? '…' : 'Cancel booking'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ marginTop: 32 }}>
+      <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 700, color: C.inkMute, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>
+        {pending.length > 0 ? `${pending.length} pending ${pending.length === 1 ? 'request' : 'requests'}` : 'Bookings'}
+      </div>
+      {pending.map(renderCard)}
+      {other.length > 0 && (
+        <>
+          <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 700, color: C.inkMute, letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: 16, marginBottom: 12 }}>
+            History
+          </div>
+          {other.map(renderCard)}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// HOST
+// ============================================================================
+function HostView({ listings, userId, onAdd, onSpotTap, onEdit, onDelete, onLogout, bookingsRefreshKey, onBookingsChange }) {
   const myListings = listings.filter((s) => s.user_id && s.user_id === userId);
   const totalSpots = myListings.length;
   const estMonthly = myListings.reduce((sum, s) => sum + (s.rate * 5 * 22), 0);
@@ -1385,6 +1711,8 @@ function HostView({ listings, userId, onAdd, onSpotTap, onEdit, onDelete, onLogo
           ))}
         </div>
       )}
+
+      <HostBookingsList userId={userId} refreshKey={bookingsRefreshKey} onUpdate={onBookingsChange} />
 
       {pendingDelete && (
         <div
@@ -1563,51 +1891,101 @@ function AddSpotForm({ onCancel, onSave, initial = null }) {
 // ============================================================================
 // TRIPS
 // ============================================================================
-function TripsView({ bookings }) {
+function TripsView({ session, refreshKey, onCancel }) {
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    async function load() {
+      setLoading(true);
+      if (!session) {
+        if (alive) { setBookings([]); setLoading(false); }
+        return;
+      }
+      const data = await window.storage.fetchMyBookings();
+      if (alive) {
+        setBookings(data || []);
+        setLoading(false);
+      }
+    }
+    load();
+    return () => { alive = false; };
+  }, [session, refreshKey]);
+
+  const fmtDT = (iso) => new Date(iso).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  });
+
   return (
     <div style={{ minHeight: '100%', backgroundColor: C.white, padding: '24px 20px 100px' }}>
       <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 700, color: C.amber, letterSpacing: '0.15em', marginBottom: 10 }}>
         TRIPS
       </div>
       <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 36, fontWeight: 800, color: C.ink, lineHeight: 1.05, letterSpacing: '-0.03em', marginBottom: 24 }}>
-        {bookings.length === 0 ? 'No trips yet.' : bookings.length === 1 ? 'One trip.' : `${bookings.length} trips.`}
+        {loading ? 'Loading…' :
+          bookings.length === 0 ? 'No trips yet.' :
+            bookings.length === 1 ? 'One trip.' : `${bookings.length} trips.`}
       </div>
-      {bookings.length === 0 ? (
+
+      {!session && !loading && (
         <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 15, color: C.inkSoft, lineHeight: 1.5 }}>
-          Reserve a spot from the map and it'll show up here. Active and past parking sessions live in this tab.
+          Sign in from the Host tab to see your booking history.
         </div>
-      ) : (
-        <div>
-          {bookings.slice().reverse().map((b) => (
+      )}
+
+      {session && !loading && bookings.length === 0 && (
+        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 15, color: C.inkSoft, lineHeight: 1.5 }}>
+          Reserve a spot from the map and it'll show up here with the host's response.
+        </div>
+      )}
+
+      <div>
+        {bookings.map((b) => {
+          const listing = b.listing || {};
+          const canCancel = b.status === 'pending' || b.status === 'approved';
+          return (
             <div key={b.id} style={{
               backgroundColor: C.white, borderRadius: 16, marginBottom: 12, overflow: 'hidden',
               boxShadow: '0 2px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)',
+              padding: 16,
             }}>
-              <div style={{ height: 110, overflow: 'hidden' }}>
-                <SpotPhoto type={b.type} variant="a" />
-              </div>
-              <div style={{ padding: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 10, fontWeight: 700, color: C.amber, letterSpacing: '0.12em', marginBottom: 4 }}>
-                      {new Date(b.bookedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toUpperCase()}
-                    </div>
-                    <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 16, fontWeight: 700, color: C.ink, lineHeight: 1.2 }}>
-                      {b.title}
-                    </div>
-                    <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 12, color: C.inkMute, marginTop: 4 }}>
-                      {b.address} · {b.hours}h
-                    </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 16, fontWeight: 700, color: C.ink, lineHeight: 1.2 }}>
+                    {listing.title || 'Listing'}
                   </div>
-                  <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 18, fontWeight: 800, color: C.ink }}>
-                    ${b.total}
+                  <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 12, color: C.inkMute, marginTop: 2 }}>
+                    {listing.address}
                   </div>
                 </div>
+                <StatusPill status={b.status} />
               </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.inkSoft, marginBottom: 4 }}>
+                <span>{fmtDT(b.start_time)} → {fmtDT(b.end_time)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.ink, fontWeight: 700 }}>
+                <span>{b.total_hours} hr</span>
+                <span>${b.total_price}</span>
+              </div>
+              {canCancel && (
+                <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => onCancel(b.id)}
+                    style={{
+                      flex: 1, padding: '10px 12px', border: `1px solid ${C.line}`,
+                      backgroundColor: C.white, color: C.ink, borderRadius: 10, cursor: 'pointer',
+                      fontFamily: '"Inter", sans-serif', fontSize: 13, fontWeight: 600,
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1820,12 +2198,13 @@ export default function Turnout() {
   const [view, setView] = useState('welcome');
   const [tab, setTab] = useState('find');
   const [selectedSpot, setSelectedSpot] = useState(null);
+  const [reserveContext, setReserveContext] = useState(null); // { spot, initialHours }
   const [lastBooking, setLastBooking] = useState(null);
   const [listings, setListings] = useState([]);
-  const [bookings, setBookings] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [session, setSession] = useState(null);
   const [editingSpot, setEditingSpot] = useState(null);
+  const [bookingsRefreshKey, setBookingsRefreshKey] = useState(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -1859,10 +2238,6 @@ export default function Turnout() {
         const l = await window.storage.get('turnout:listings');
         if (l && l.value) setListings(JSON.parse(l.value));
       } catch {}
-      try {
-        const b = await window.storage.get('turnout:bookings');
-        if (b && b.value) setBookings(JSON.parse(b.value));
-      } catch {}
       setLoaded(true);
     }
     load();
@@ -1873,23 +2248,49 @@ export default function Turnout() {
     window.storage.set('turnout:listings', JSON.stringify(listings)).catch(() => {});
   }, [listings, loaded]);
 
-  useEffect(() => {
-    if (!loaded) return;
-    window.storage.set('turnout:bookings', JSON.stringify(bookings)).catch(() => {});
-  }, [bookings, loaded]);
-
   const handleWelcomeContinue = () => {
     window.storage.set('turnout:onboarded', 'true').catch(() => {});
     setView('main');
   };
   const handleSpotTap = (spot) => { setSelectedSpot(spot); setView('spot'); };
-  const handleBook = (booking) => {
-    const finalBooking = { ...booking, id: uid(), bookedAt: new Date().toISOString() };
-    setBookings([...bookings, finalBooking]);
-    setLastBooking(finalBooking);
-    setView('confirm');
+
+  // User clicked "Request to book" on SpotDetail
+  const handleReserve = ({ spot, initialHours }) => {
+    if (!session) { setView('auth'); return; }
+    setReserveContext({ spot, initialHours });
+    setView('bookingForm');
   };
-  const handleConfirmDone = () => { setView('main'); setTab('trips'); };
+
+  // BookingRequestForm submits — actually creates the booking in Supabase
+  const handleSubmitBooking = async (payload) => {
+    const result = await window.storage.createBooking(payload);
+    if (result?.data) {
+      setLastBooking({ ...result.data, _spot: payload._spot });
+      setBookingsRefreshKey((k) => k + 1);
+      setView('requestSent');
+      return { data: result.data };
+    }
+    return result;
+  };
+
+  const handleRequestSentDone = () => {
+    setReserveContext(null);
+    setLastBooking(null);
+    setView('main');
+    setTab('trips');
+  };
+
+  const handleCancelBooking = async (id) => {
+    const result = await window.storage.updateBookingStatus(id, 'cancelled');
+    if (result?.data) {
+      setBookingsRefreshKey((k) => k + 1);
+    }
+  };
+
+  const handleBookingsChange = () => {
+    setBookingsRefreshKey((k) => k + 1);
+  };
+
   const handleAddSpot = async (spot) => {
     if (!session) { setView('auth'); return; }
     const inserted = await window.storage.insertListing(spot);
@@ -1940,10 +2341,13 @@ export default function Turnout() {
     return <div style={containerStyle}><FounderNote onBack={() => setView('welcome')} /></div>;
   }
   if (view === 'spot' && selectedSpot) {
-    return <div style={containerStyle}><SpotDetail spot={selectedSpot} onBack={() => setView('main')} onBook={handleBook} /></div>;
+    return <div style={containerStyle}><SpotDetail spot={selectedSpot} onBack={() => setView('main')} onReserve={handleReserve} /></div>;
   }
-  if (view === 'confirm' && lastBooking) {
-    return <div style={containerStyle}><BookingConfirm booking={lastBooking} onDone={handleConfirmDone} /></div>;
+  if (view === 'bookingForm' && reserveContext) {
+    return <div style={containerStyle}><BookingRequestForm spot={reserveContext.spot} initialHours={reserveContext.initialHours} onCancel={() => setView('spot')} onSubmit={handleSubmitBooking} /></div>;
+  }
+  if (view === 'requestSent' && lastBooking) {
+    return <div style={containerStyle}><BookingRequestSent booking={lastBooking} onDone={handleRequestSentDone} /></div>;
   }
   if (view === 'addSpot') {
     return <div style={containerStyle}><AddSpotForm onCancel={() => setView('main')} onSave={handleAddSpot} /></div>;
@@ -1959,8 +2363,8 @@ export default function Turnout() {
     <div style={containerStyle}>
       <div style={{ flex: 1, position: 'relative', overflow: 'auto', minHeight: 'calc(100vh - 78px)' }}>
         {tab === 'find' && <FindView listings={listings} onSpotTap={handleSpotTap} />}
-        {tab === 'host' && <HostView listings={listings} userId={session?.user?.id} onAdd={() => setView('addSpot')} onSpotTap={handleSpotTap} onEdit={handleEditSpot} onDelete={handleDeleteSpot} onLogout={handleLogout} />}
-        {tab === 'trips' && <TripsView bookings={bookings} />}
+        {tab === 'host' && <HostView listings={listings} userId={session?.user?.id} onAdd={() => setView('addSpot')} onSpotTap={handleSpotTap} onEdit={handleEditSpot} onDelete={handleDeleteSpot} onLogout={handleLogout} bookingsRefreshKey={bookingsRefreshKey} onBookingsChange={handleBookingsChange} />}
+        {tab === 'trips' && <TripsView session={session} refreshKey={bookingsRefreshKey} onCancel={handleCancelBooking} />}
       </div>
       <BottomNav tab={tab} setTab={handleSetTab} />
     </div>
