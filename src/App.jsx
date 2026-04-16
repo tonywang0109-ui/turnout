@@ -636,7 +636,7 @@ function FindView({ listings, onSpotTap }) {
   // Demo spots removed for real launch — DEMO_SPOTS constant kept for screenshots/dev only
   const allSpots = [...listings];
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: C.white }}>
+    <div style={{ position: 'relative', width: '100%', height: '100vh', backgroundColor: C.white }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
         padding: '16px 16px 12px',
