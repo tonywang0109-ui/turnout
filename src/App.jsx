@@ -322,6 +322,29 @@ function SpotPhoto({ type, variant = 'a', withCameraBadge = false }) {
 }
 
 // ============================================================================
+// GEOCODING (Nominatim — free, no API key, ~1 req/sec limit)
+// ============================================================================
+async function geocodeAddress(address) {
+  try {
+    const query = encodeURIComponent(`${address}, Vancouver, BC, Canada`);
+    const url = `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`;
+    const res = await fetch(url, {
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) return null;
+    const lat = parseFloat(data[0].lat);
+    const lng = parseFloat(data[0].lon);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+    return { lat, lng };
+  } catch (err) {
+    console.warn('Geocoding failed:', err);
+    return null;
+  }
+}
+
+// ============================================================================
 // MAP ERROR BOUNDARY
 // ============================================================================
 class MapErrorBoundary extends React.Component {
@@ -351,14 +374,6 @@ function VanMap({ spots, userListings, onSpotTap }) {
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
   const [tilesFailed, setTilesFailed] = useState(false);
-  const [debug, setDebug] = useState({
-    leafletLoaded: false,
-    containerHeight: 0,
-    mapInit: false,
-    tilesLoaded: 0,
-    tileErrors: 0,
-    msg: 'starting...',
-  });
 
   const allPins = [
     ...spots.map(s => ({ ...s, isUser: false })),
@@ -366,15 +381,12 @@ function VanMap({ spots, userListings, onSpotTap }) {
   ];
 
   // Coal Harbour center
-  const CENTER = [49.2885, -123.1215];
+  const CENTER = [49.2890, -123.1150];
 
   useEffect(() => {
-    const leafletLoaded = typeof window !== 'undefined' && !!window.L;
-    const h = mapRef.current ? mapRef.current.offsetHeight : 0;
-    setDebug(d => ({ ...d, leafletLoaded, containerHeight: h, msg: leafletLoaded ? (h > 0 ? 'init map' : 'height=0 BAD') : 'no window.L BAD' }));
-
     if (!mapRef.current) return;
     if (typeof window === 'undefined' || !window.L) {
+      setTilesFailed(true);
       return;
     }
     if (mapInstanceRef.current) return;
@@ -388,7 +400,6 @@ function VanMap({ spots, userListings, onSpotTap }) {
       tap: true,
     });
     mapInstanceRef.current = map;
-    setDebug(d => ({ ...d, mapInit: true }));
 
     const tileLayer = L.tileLayer(
       'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
@@ -397,20 +408,15 @@ function VanMap({ spots, userListings, onSpotTap }) {
         subdomains: 'abcd',
       }
     );
-    tileLayer.on('tileload', () => {
-      setDebug(d => ({ ...d, tilesLoaded: d.tilesLoaded + 1 }));
-    });
+    let tileErrorCount = 0;
     tileLayer.on('tileerror', () => {
-      setDebug(d => ({ ...d, tileErrors: d.tileErrors + 1 }));
+      tileErrorCount++;
+      if (tileErrorCount >= 5) setTilesFailed(true);
     });
     tileLayer.addTo(map);
 
     // Ensure Leaflet recalculates size after mount
-    setTimeout(() => {
-      map.invalidateSize();
-      const h2 = mapRef.current ? mapRef.current.offsetHeight : 0;
-      setDebug(d => ({ ...d, containerHeight: h2 }));
-    }, 100);
+    setTimeout(() => map.invalidateSize(), 100);
 
     return () => {
       map.remove();
@@ -429,8 +435,11 @@ function VanMap({ spots, userListings, onSpotTap }) {
     markersRef.current = [];
 
     allPins.forEach((spot) => {
-      const lat = spot.lat ?? (CENTER[0] + ((spot.y ?? 300) - 300) * -0.00004);
-      const lng = spot.lng ?? (CENTER[1] + ((spot.x ?? 200) - 200) * 0.00006);
+      // Only show pins with real coordinates. Skip otherwise.
+      if (spot.lat == null || spot.lng == null) return;
+      const lat = Number(spot.lat);
+      const lng = Number(spot.lng);
+      if (Number.isNaN(lat) || Number.isNaN(lng)) return;
 
       const isUser = spot.isUser;
       const bg = isUser ? C.amber : C.white;
@@ -469,23 +478,14 @@ function VanMap({ spots, userListings, onSpotTap }) {
   }
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 9999,
-        background: 'rgba(0,0,0,0.85)', color: '#fff', fontFamily: 'monospace',
-        fontSize: 10, padding: '6px 8px', lineHeight: 1.3, pointerEvents: 'none',
-      }}>
-        L:{debug.leafletLoaded ? 'YES' : 'NO'} | h:{debug.containerHeight}px | init:{debug.mapInit ? 'Y' : 'N'} | tiles:{debug.tilesLoaded} err:{debug.tileErrors} | {debug.msg}
-      </div>
-      <div
-        ref={mapRef}
-        style={{
-          width: '100%',
-          height: '100%',
-          backgroundColor: C.mapBg,
-        }}
-      />
-    </div>
+    <div
+      ref={mapRef}
+      style={{
+        width: '100%',
+        height: '100%',
+        backgroundColor: C.mapBg,
+      }}
+    />
   );
 }
 
@@ -1448,11 +1448,17 @@ function AddSpotForm({ onCancel, onSave, initial = null }) {
   const [type, setType] = useState(initial?.type || 'Underground');
   const [available, setAvailable] = useState(initial?.available || 'Mon–Fri, 8am–6pm');
   const [description, setDescription] = useState(initial?.description || '');
+  const [saving, setSaving] = useState(false);
 
-  const canSave = title && address && rate;
+  const canSave = title && address && rate && !saving;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!canSave) return;
+    setSaving(true);
+
+    // Geocode address. If it fails, save without coords (pin hidden until edited).
+    const coords = await geocodeAddress(address);
+
     if (isEdit) {
       onSave({
         id: initial.id,
@@ -1462,6 +1468,8 @@ function AddSpotForm({ onCancel, onSave, initial = null }) {
         type,
         available,
         description,
+        lat: coords?.lat ?? initial.lat ?? null,
+        lng: coords?.lng ?? initial.lng ?? null,
       });
       return;
     }
@@ -1473,6 +1481,8 @@ function AddSpotForm({ onCancel, onSave, initial = null }) {
       perks: ['New', 'Flexible'],
       amenities: ['flexible', 'covered'],
       available,
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
       x: 245 + Math.random() * 40 - 20,
       y: 215 + Math.random() * 40 - 20,
     };
