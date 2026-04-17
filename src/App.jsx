@@ -824,114 +824,76 @@ function ClusterSheet({ group, onClose, onPick }) {
 // ============================================================================
 function Welcome({ onContinue, onStory }) {
   return (
-    <div style={{ minHeight: '100%', backgroundColor: C.white, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ position: 'relative', height: 480, overflow: 'hidden' }}>
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: `linear-gradient(165deg, ${C.green} 0%, #1F5340 60%, ${C.amber} 140%)`,
-        }} />
-        <div style={{
-          position: 'absolute', top: '30%', right: '-20%',
-          width: 400, height: 400, borderRadius: '50%',
-          background: `radial-gradient(circle, ${C.amber} 0%, transparent 60%)`,
-          opacity: 0.3,
-        }} />
-        <div style={{ position: 'relative', padding: '24px 24px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <LogoMark size={40} />
-          <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 18, fontWeight: 700, color: C.white, letterSpacing: '-0.01em' }}>
-            Turnout
-          </div>
-        </div>
-        <div style={{ position: 'absolute', bottom: 40, left: 24, right: 24 }}>
-          <div style={{
-            display: 'inline-block', padding: '6px 12px',
-            backgroundColor: 'rgba(255, 255, 255, 0.15)', borderRadius: 100,
-            fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 600,
-            color: C.white, letterSpacing: '0.05em', marginBottom: 20,
-          }}>
-            ◆ NOW IN VANCOUVER
-          </div>
-          <div style={{
-            fontFamily: '"Inter", sans-serif', fontSize: 44, fontWeight: 800,
-            lineHeight: 1.02, color: C.white, letterSpacing: '-0.03em', marginBottom: 16,
-          }}>
-            Park anywhere.<br />
-            <span style={{ fontFamily: '"Instrument Serif", serif', fontStyle: 'italic', fontWeight: 400 }}>
-              Or get paid
-            </span>{' '}
-            while you're out.
-          </div>
-          <div style={{
-            fontFamily: '"Inter", sans-serif', fontSize: 15, color: C.white,
-            opacity: 0.85, lineHeight: 1.5, maxWidth: 340,
-          }}>
-            The first marketplace for driveways, condo stalls, and unused parking — built by everyday people, for everyday people.
-          </div>
+    <div style={{
+      height: '100dvh', minHeight: 600, position: 'relative', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column',
+    }}>
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: `linear-gradient(165deg, ${C.green} 0%, #1F5340 55%, ${C.amber} 140%)`,
+      }} />
+      <div style={{
+        position: 'absolute', top: '15%', right: '-25%',
+        width: 500, height: 500, borderRadius: '50%',
+        background: `radial-gradient(circle, ${C.amber} 0%, transparent 60%)`,
+        opacity: 0.3,
+      }} />
+
+      <div style={{ position: 'relative', padding: '24px 24px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <LogoMark size={40} />
+        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 18, fontWeight: 700, color: C.white, letterSpacing: '-0.01em' }}>
+          Turnout
         </div>
       </div>
 
-      <div style={{ padding: '32px 24px 24px' }}>
-        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 700, color: C.amber, letterSpacing: '0.15em', marginBottom: 12 }}>
-          HOW IT WORKS
-        </div>
-        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 26, fontWeight: 800, color: C.ink, letterSpacing: '-0.02em', lineHeight: 1.15, marginBottom: 24 }}>
-          Two ways to use Turnout.
-        </div>
-
-        <div style={{ backgroundColor: C.bg, padding: 20, borderRadius: 16, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ width: 52, height: 52, borderRadius: 14, backgroundColor: C.green, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <CarIcon size={24} color={C.white} strokeWidth={2.2} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 15, fontWeight: 700, color: C.ink, marginBottom: 2 }}>
-              Find a spot in seconds
-            </div>
-            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.inkSoft, lineHeight: 1.4 }}>
-              Skip circling. Reserve a driveway or garage near you.
-            </div>
-          </div>
-        </div>
-
-        <div style={{ backgroundColor: C.bg, padding: 20, borderRadius: 16, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ width: 52, height: 52, borderRadius: 14, backgroundColor: C.amber, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Home size={24} color={C.white} strokeWidth={2.2} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 15, fontWeight: 700, color: C.ink, marginBottom: 2 }}>
-              Earn from your empty space
-            </div>
-            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.inkSoft, lineHeight: 1.4 }}>
-              List your driveway or stall. Make passive income.
-            </div>
-          </div>
-        </div>
-
-        <div onClick={onStory} style={{
-          padding: '16px 0', borderTop: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}`,
-          marginBottom: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      <div style={{
+        position: 'relative', flex: 1,
+        display: 'flex', flexDirection: 'column', justifyContent: 'center',
+        padding: '0 24px',
+      }}>
+        <div style={{
+          display: 'inline-block', padding: '6px 12px',
+          backgroundColor: 'rgba(255, 255, 255, 0.15)', borderRadius: 100,
+          fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 600,
+          color: C.white, letterSpacing: '0.05em', marginBottom: 20,
+          alignSelf: 'flex-start',
         }}>
-          <div>
-            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 700, color: C.amber, letterSpacing: '0.12em', marginBottom: 4 }}>
-              A NOTE FROM THE FOUNDER
-            </div>
-            <div style={{ fontFamily: '"Instrument Serif", serif', fontStyle: 'italic', fontSize: 19, color: C.ink, lineHeight: 1.25 }}>
-              "I had this idea ten years ago."
-            </div>
-          </div>
-          <ArrowRight size={20} color={C.ink} strokeWidth={2} />
+          ◆ NOW IN VANCOUVER
         </div>
+        <div style={{
+          fontFamily: '"Inter", sans-serif', fontSize: 44, fontWeight: 800,
+          lineHeight: 1.02, color: C.white, letterSpacing: '-0.03em', marginBottom: 16,
+        }}>
+          Park anywhere.<br />
+          <span style={{ fontFamily: '"Instrument Serif", serif', fontStyle: 'italic', fontWeight: 400 }}>
+            Or get paid
+          </span>{' '}
+          while you're out.
+        </div>
+        <div style={{
+          fontFamily: '"Inter", sans-serif', fontSize: 15, color: C.white,
+          opacity: 0.85, lineHeight: 1.5, maxWidth: 340,
+        }}>
+          The first marketplace for driveways, condo stalls, and unused parking — built by everyday people, for everyday people.
+        </div>
+      </div>
 
+      <div style={{ position: 'relative', padding: '0 24px 28px' }}>
         <button onClick={onContinue} style={{
-          width: '100%', backgroundColor: C.ink, color: C.white, border: 'none',
+          width: '100%', backgroundColor: C.white, color: C.ink, border: 'none',
           padding: '18px 24px', fontFamily: '"Inter", sans-serif', fontSize: 16, fontWeight: 700,
           cursor: 'pointer', borderRadius: 14, letterSpacing: '-0.01em',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          marginBottom: 14, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
         }}>
           Explore Vancouver
-          <ArrowRight size={18} color={C.white} strokeWidth={2.5} />
+          <ArrowRight size={18} color={C.ink} strokeWidth={2.5} />
         </button>
-        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 12, color: C.inkMute, textAlign: 'center', marginTop: 14 }}>
-          Prototype · v0.4 · Coal Harbour
+        <div onClick={onStory} style={{
+          fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.white, opacity: 0.85,
+          textAlign: 'center', cursor: 'pointer', padding: '8px 0',
+        }}>
+          Read the founder's note →
         </div>
       </div>
     </div>
@@ -1038,7 +1000,7 @@ function FindView({ listings, onSpotTap }) {
         </div>
       </div>
 
-      <div style={{ width: '100%', height: 'calc(100dvh - 180px)', paddingTop: 78, boxSizing: 'border-box' }}>
+      <div style={{ width: '100%', height: 'calc(100dvh - 78px)', paddingTop: 78, boxSizing: 'border-box' }}>
         <MapErrorBoundary childProps={{ spots: [], userListings: listings, onSpotTap }}>
           <VanMap spots={[]} userListings={listings} onSpotTap={onSpotTap} onClusterTap={handleClusterTap} />
         </MapErrorBoundary>
@@ -1046,7 +1008,7 @@ function FindView({ listings, onSpotTap }) {
 
       {clusterGroup && <ClusterSheet group={clusterGroup} onClose={handleClusterClose} onPick={handleClusterPickSpot} />}
 
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 12, zIndex: 500, backgroundColor: C.white, paddingTop: 12, boxShadow: '0 -8px 20px rgba(0,0,0,0.06)' }}>
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 12, zIndex: 500, paddingTop: 12 }}>
         <div style={{ padding: '0 16px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, fontWeight: 700, color: C.ink }}>
             {allSpots.length} spots near you
@@ -2366,6 +2328,17 @@ function BottomNav({ tab, setTab }) {
 // ============================================================================
 export default function Turnout() {
   useFonts();
+  useEffect(() => {
+    const BG = '#D6E9F7';
+    const prevBody = document.body.style.backgroundColor;
+    const prevHtml = document.documentElement.style.backgroundColor;
+    document.body.style.backgroundColor = BG;
+    document.documentElement.style.backgroundColor = BG;
+    return () => {
+      document.body.style.backgroundColor = prevBody;
+      document.documentElement.style.backgroundColor = prevHtml;
+    };
+  }, []);
   const [view, setView] = useState('welcome');
   const [tab, setTab] = useState('find');
   const [selectedSpot, setSelectedSpot] = useState(null);
