@@ -30,6 +30,29 @@ async function getCurrentUser() {
   }
 }
 
+// Fetch emails for a list of user IDs via the get_user_emails RPC.
+// Returns a map of { userId: email }.
+async function fetchEmailsForUsers(userIds) {
+  if (!userIds || userIds.length === 0) return {}
+  try {
+    const { data, error } = await withTimeout(
+      supabase.rpc('get_user_emails', { user_ids: userIds }),
+      5000,
+      'rpc.get_user_emails'
+    )
+    if (error) {
+      console.error('[turnout] get_user_emails failed:', error.message)
+      return {}
+    }
+    const map = {}
+    ;(data || []).forEach(row => { map[row.id] = row.email })
+    return map
+  } catch (err) {
+    console.error('[turnout] fetchEmailsForUsers error:', err)
+    return {}
+  }
+}
+
 if (typeof window !== 'undefined' && !window.storage) {
   window.storage = {
     get: async (key) => {
@@ -222,7 +245,11 @@ if (typeof window !== 'undefined' && !window.storage) {
       )
       console.log('[turnout] fetchMyBookings done', { count: data?.length, error })
       if (error) return []
-      return data || []
+      if (!data || data.length === 0) return []
+      // Enrich with host emails for approved bookings
+      const approvedHostIds = Array.from(new Set(data.filter(b => b.status === 'approved').map(b => b.host_id)))
+      const emails = await fetchEmailsForUsers(approvedHostIds)
+      return data.map(b => ({ ...b, _counterparty_email: emails[b.host_id] || null }))
     },
 
     fetchBookingsForHost: async () => {
@@ -237,7 +264,11 @@ if (typeof window !== 'undefined' && !window.storage) {
       )
       console.log('[turnout] fetchBookingsForHost done', { count: data?.length, error })
       if (error) return []
-      return data || []
+      if (!data || data.length === 0) return []
+      // Enrich with renter emails for approved bookings
+      const approvedRenterIds = Array.from(new Set(data.filter(b => b.status === 'approved').map(b => b.renter_id)))
+      const emails = await fetchEmailsForUsers(approvedRenterIds)
+      return data.map(b => ({ ...b, _counterparty_email: emails[b.renter_id] || null }))
     },
   }
 }

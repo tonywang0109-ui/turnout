@@ -369,7 +369,7 @@ class MapErrorBoundary extends React.Component {
 // ============================================================================
 // VANCOUVER MAP (LEAFLET)
 // ============================================================================
-function VanMap({ spots, userListings, onSpotTap }) {
+function VanMap({ spots, userListings, onSpotTap, onClusterTap }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
@@ -434,33 +434,78 @@ function VanMap({ spots, userListings, onSpotTap }) {
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
 
-    allPins.forEach((spot) => {
-      // Only show pins with real coordinates. Skip otherwise.
-      if (spot.lat == null || spot.lng == null) return;
-      const lat = Number(spot.lat);
-      const lng = Number(spot.lng);
-      if (Number.isNaN(lat) || Number.isNaN(lng)) return;
+    // Filter valid pins
+    const validPins = allPins
+      .map(spot => {
+        if (spot.lat == null || spot.lng == null) return null;
+        const lat = Number(spot.lat);
+        const lng = Number(spot.lng);
+        if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+        return { ...spot, _lat: lat, _lng: lng };
+      })
+      .filter(Boolean);
 
-      const isUser = spot.isUser;
-      const bg = isUser ? C.amber : C.white;
-      const fg = isUser ? C.white : C.ink;
-      const border = isUser ? C.amber : C.ink;
+    // Cluster pins within ~50m. At Vancouver's latitude:
+    //   1 degree lat ≈ 111 km, so 50m ≈ 0.00045 degrees
+    //   1 degree lng at 49°N ≈ 73 km, so 50m ≈ 0.00069 degrees
+    // Round to 3 decimals (~111m lat, ~73m lng) — close enough for same-building grouping.
+    const clusters = new Map();
+    validPins.forEach(spot => {
+      const key = `${spot._lat.toFixed(3)},${spot._lng.toFixed(3)}`;
+      if (!clusters.has(key)) clusters.set(key, []);
+      clusters.get(key).push(spot);
+    });
 
-      const html = `
-        <div style="
-          background:${bg};
-          color:${fg};
-          border:1.5px solid ${border};
-          border-radius:14px;
-          padding:4px 10px;
-          font-family:Inter,sans-serif;
-          font-size:13px;
-          font-weight:700;
-          white-space:nowrap;
-          box-shadow:0 2px 6px rgba(0,0,0,0.15);
-          cursor:pointer;
-        ">$${spot.rate}</div>
-      `;
+    clusters.forEach((group) => {
+      // Use the first pin's coords as the cluster center
+      const lat = group[0]._lat;
+      const lng = group[0]._lng;
+      const isCluster = group.length > 1;
+      const anyUser = group.some(s => s.isUser);
+
+      let html;
+      if (isCluster) {
+        // Cluster pin: show count, neutral color
+        html = `
+          <div style="
+            background:${C.ink};
+            color:${C.white};
+            border:2px solid ${C.white};
+            border-radius:18px;
+            padding:6px 12px;
+            font-family:Inter,sans-serif;
+            font-size:13px;
+            font-weight:700;
+            white-space:nowrap;
+            box-shadow:0 3px 8px rgba(0,0,0,0.25);
+            cursor:pointer;
+            display:flex;
+            align-items:center;
+            gap:6px;
+          ">${group.length} spots</div>
+        `;
+      } else {
+        const spot = group[0];
+        const isUser = spot.isUser;
+        const bg = isUser ? C.amber : C.white;
+        const fg = isUser ? C.white : C.ink;
+        const border = isUser ? C.amber : C.ink;
+        html = `
+          <div style="
+            background:${bg};
+            color:${fg};
+            border:1.5px solid ${border};
+            border-radius:14px;
+            padding:4px 10px;
+            font-family:Inter,sans-serif;
+            font-size:13px;
+            font-weight:700;
+            white-space:nowrap;
+            box-shadow:0 2px 6px rgba(0,0,0,0.15);
+            cursor:pointer;
+          ">$${spot.rate}</div>
+        `;
+      }
       const icon = L.divIcon({
         className: 'turnout-price-pin',
         html,
@@ -468,7 +513,13 @@ function VanMap({ spots, userListings, onSpotTap }) {
         iconAnchor: [24, 14],
       });
       const marker = L.marker([lat, lng], { icon }).addTo(map);
-      marker.on('click', () => onSpotTap(spot));
+      if (isCluster) {
+        marker.on('click', () => {
+          if (onClusterTap) onClusterTap(group);
+        });
+      } else {
+        marker.on('click', () => onSpotTap(group[0]));
+      }
       markersRef.current.push(marker);
     });
   }, [spots, userListings]);
@@ -685,6 +736,90 @@ function VanMapSVG({ spots, userListings, onSpotTap }) {
 }
 
 // ============================================================================
+// CLUSTER SHEET (bottom sheet listing spots at same location)
+// ============================================================================
+function ClusterSheet({ group, onClose, onPick }) {
+  if (!group || group.length === 0) return null;
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, backgroundColor: 'rgba(23,23,23,0.45)',
+        zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          backgroundColor: C.white,
+          width: '100%', maxWidth: 440,
+          borderTopLeftRadius: 20, borderTopRightRadius: 20,
+          padding: '20px 20px 32px',
+          boxShadow: '0 -8px 32px rgba(0,0,0,0.15)',
+          maxHeight: '70vh', overflowY: 'auto',
+        }}
+      >
+        <div style={{
+          width: 36, height: 4, backgroundColor: C.line, borderRadius: 2,
+          margin: '0 auto 16px',
+        }} />
+        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 700, color: C.amber, letterSpacing: '0.15em', marginBottom: 6 }}>
+          {group.length} SPOTS HERE
+        </div>
+        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 18, fontWeight: 800, color: C.ink, marginBottom: 4, letterSpacing: '-0.01em' }}>
+          {group[0].address || 'Same location'}
+        </div>
+        <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.inkMute, marginBottom: 16 }}>
+          Choose a spot to see details.
+        </div>
+        <div>
+          {group.map((spot) => (
+            <div
+              key={spot.id}
+              onClick={() => onPick(spot)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '14px 0', borderBottom: `1px solid ${C.line}`,
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{
+                width: 44, height: 44, borderRadius: 10, flexShrink: 0,
+                backgroundColor: spot.isUser ? C.amber : C.green,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: C.white, fontFamily: '"Inter", sans-serif', fontSize: 14, fontWeight: 800,
+              }}>
+                ${spot.rate}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 15, fontWeight: 700, color: C.ink, lineHeight: 1.2 }}>
+                  {spot.title}
+                </div>
+                <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 12, color: C.inkMute, marginTop: 2 }}>
+                  {spot.type} · {spot.available || 'Flexible'}
+                </div>
+              </div>
+              <ArrowRight size={16} color={C.inkMute} strokeWidth={2} />
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            marginTop: 16, width: '100%', padding: '14px',
+            border: `1px solid ${C.line}`, backgroundColor: C.white,
+            color: C.ink, borderRadius: 12, cursor: 'pointer',
+            fontFamily: '"Inter", sans-serif', fontSize: 14, fontWeight: 600,
+          }}
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // WELCOME
 // ============================================================================
 function Welcome({ onContinue, onStory }) {
@@ -869,6 +1004,13 @@ function FounderNote({ onBack }) {
 function FindView({ listings, onSpotTap }) {
   // Demo spots removed for real launch — DEMO_SPOTS constant kept for screenshots/dev only
   const allSpots = [...listings];
+  const [clusterGroup, setClusterGroup] = useState(null);
+  const handleClusterTap = (group) => setClusterGroup(group);
+  const handleClusterClose = () => setClusterGroup(null);
+  const handleClusterPickSpot = (spot) => {
+    setClusterGroup(null);
+    onSpotTap(spot);
+  };
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: C.white }}>
       <div style={{
@@ -898,9 +1040,11 @@ function FindView({ listings, onSpotTap }) {
 
       <div style={{ width: '100%', height: 'calc(100vh - 180px)', paddingTop: 78, boxSizing: 'border-box' }}>
         <MapErrorBoundary childProps={{ spots: [], userListings: listings, onSpotTap }}>
-          <VanMap spots={[]} userListings={listings} onSpotTap={onSpotTap} />
+          <VanMap spots={[]} userListings={listings} onSpotTap={onSpotTap} onClusterTap={handleClusterTap} />
         </MapErrorBoundary>
       </div>
+
+      {clusterGroup && <ClusterSheet group={clusterGroup} onClose={handleClusterClose} onPick={handleClusterPickSpot} />}
 
       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 12 }}>
         <div style={{ padding: '0 16px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1541,6 +1685,19 @@ function HostBookingsList({ userId, refreshKey, onUpdate }) {
           <span>{b.total_hours} hr</span>
           <span>${b.total_price}</span>
         </div>
+        {b.status === 'approved' && b._counterparty_email && (
+          <div style={{
+            marginTop: 10, padding: '10px 12px', backgroundColor: C.greenSoft,
+            borderRadius: 10, fontFamily: '"Inter", sans-serif', fontSize: 12,
+          }}>
+            <div style={{ color: C.inkMute, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: 10, marginBottom: 2 }}>
+              Renter contact
+            </div>
+            <a href={`mailto:${b._counterparty_email}`} style={{ color: C.green, fontWeight: 700, textDecoration: 'none' }}>
+              {b._counterparty_email}
+            </a>
+          </div>
+        )}
         {(canApproveDecline || canCancel) && (
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
             {canApproveDecline && (
@@ -1968,6 +2125,19 @@ function TripsView({ session, refreshKey, onCancel }) {
                 <span>{b.total_hours} hr</span>
                 <span>${b.total_price}</span>
               </div>
+              {b.status === 'approved' && b._counterparty_email && (
+                <div style={{
+                  marginTop: 10, padding: '10px 12px', backgroundColor: C.greenSoft,
+                  borderRadius: 10, fontFamily: '"Inter", sans-serif', fontSize: 12,
+                }}>
+                  <div style={{ color: C.inkMute, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: 10, marginBottom: 2 }}>
+                    Host contact
+                  </div>
+                  <a href={`mailto:${b._counterparty_email}`} style={{ color: C.green, fontWeight: 700, textDecoration: 'none' }}>
+                    {b._counterparty_email}
+                  </a>
+                </div>
+              )}
               {canCancel && (
                 <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
                   <button
