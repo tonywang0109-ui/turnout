@@ -379,6 +379,7 @@ function VanMap({ spots, userListings, onSpotTap, onClusterTap }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
+  const hasFittedRef = useRef(false);
   const [tilesFailed, setTilesFailed] = useState(false);
 
   const allPins = [
@@ -528,6 +529,14 @@ function VanMap({ spots, userListings, onSpotTap, onClusterTap }) {
       }
       markersRef.current.push(marker);
     });
+
+    // On first render with pins, frame the map around all of them.
+    // Don't re-fit on subsequent updates so the user's pan/zoom is preserved.
+    if (!hasFittedRef.current && validPins.length > 0) {
+      const bounds = L.latLngBounds(validPins.map(p => [p._lat, p._lng]));
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+      hasFittedRef.current = true;
+    }
   }, [spots, userListings]);
 
   if (tilesFailed) {
