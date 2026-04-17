@@ -1012,7 +1012,7 @@ function FindView({ listings, onSpotTap }) {
     onSpotTap(spot);
   };
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: C.white }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: C.white, display: 'flex', flexDirection: 'column' }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
         padding: '16px 16px 12px',
@@ -1038,7 +1038,7 @@ function FindView({ listings, onSpotTap }) {
         </div>
       </div>
 
-      <div style={{ width: '100%', height: 'calc(100dvh - 180px)', paddingTop: 78, boxSizing: 'border-box' }}>
+      <div style={{ width: '100%', flex: 1, minHeight: 0, paddingTop: 78, boxSizing: 'border-box' }}>
         <MapErrorBoundary childProps={{ spots: [], userListings: listings, onSpotTap }}>
           <VanMap spots={[]} userListings={listings} onSpotTap={onSpotTap} onClusterTap={handleClusterTap} />
         </MapErrorBoundary>
@@ -1046,7 +1046,7 @@ function FindView({ listings, onSpotTap }) {
 
       {clusterGroup && <ClusterSheet group={clusterGroup} onClose={handleClusterClose} onPick={handleClusterPickSpot} />}
 
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 12 }}>
+      <div style={{ paddingBottom: 12, flexShrink: 0 }}>
         <div style={{ padding: '0 16px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, fontWeight: 700, color: C.ink }}>
             {allSpots.length} spots near you
