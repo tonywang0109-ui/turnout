@@ -1012,7 +1012,7 @@ function FindView({ listings, onSpotTap }) {
     onSpotTap(spot);
   };
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: C.white, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: C.white }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
         padding: '16px 16px 12px',
@@ -1038,7 +1038,7 @@ function FindView({ listings, onSpotTap }) {
         </div>
       </div>
 
-      <div style={{ width: '100%', flex: 1, minHeight: 0, paddingTop: 78, boxSizing: 'border-box' }}>
+      <div style={{ width: '100%', height: 'calc(100vh - 180px)', paddingTop: 78, boxSizing: 'border-box' }}>
         <MapErrorBoundary childProps={{ spots: [], userListings: listings, onSpotTap }}>
           <VanMap spots={[]} userListings={listings} onSpotTap={onSpotTap} onClusterTap={handleClusterTap} />
         </MapErrorBoundary>
@@ -1046,7 +1046,7 @@ function FindView({ listings, onSpotTap }) {
 
       {clusterGroup && <ClusterSheet group={clusterGroup} onClose={handleClusterClose} onPick={handleClusterPickSpot} />}
 
-      <div style={{ paddingBottom: 12, flexShrink: 0 }}>
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 12 }}>
         <div style={{ padding: '0 16px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, fontWeight: 700, color: C.ink }}>
             {allSpots.length} spots near you
@@ -2499,7 +2499,7 @@ export default function Turnout() {
   };
 
   const containerStyle = {
-    maxWidth: 440, margin: '0 auto', minHeight: '100dvh', backgroundColor: C.white,
+    maxWidth: 440, margin: '0 auto', minHeight: '100vh', backgroundColor: C.white,
     position: 'relative', boxShadow: '0 0 60px rgba(15, 58, 46, 0.08)',
     fontFamily: '"Inter", sans-serif', color: C.ink, display: 'flex', flexDirection: 'column',
   };
@@ -2531,7 +2531,7 @@ export default function Turnout() {
 
   return (
     <div style={containerStyle}>
-      <div style={{ flex: 1, position: 'relative', overflow: 'auto', minHeight: 'calc(100dvh - 78px)' }}>
+      <div style={{ flex: 1, position: 'relative', overflow: 'auto', minHeight: 'calc(100vh - 78px)' }}>
         {tab === 'find' && <FindView listings={listings} onSpotTap={handleSpotTap} />}
         {tab === 'host' && <HostView listings={listings} userId={session?.user?.id} onAdd={() => setView('addSpot')} onSpotTap={handleSpotTap} onEdit={handleEditSpot} onDelete={handleDeleteSpot} onLogout={handleLogout} bookingsRefreshKey={bookingsRefreshKey} onBookingsChange={handleBookingsChange} />}
         {tab === 'trips' && <TripsView session={session} refreshKey={bookingsRefreshKey} onCancel={handleCancelBooking} />}
