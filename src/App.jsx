@@ -2329,7 +2329,7 @@ function BottomNav({ tab, setTab }) {
 export default function Turnout() {
   useFonts();
   useEffect(() => {
-    const BG = '#D0E4EF';
+    const BG = '#BEDCF2';
     const prevBody = document.body.style.backgroundColor;
     const prevHtml = document.documentElement.style.backgroundColor;
     document.body.style.backgroundColor = BG;
