@@ -1046,7 +1046,7 @@ function FindView({ listings, onSpotTap }) {
 
       {clusterGroup && <ClusterSheet group={clusterGroup} onClose={handleClusterClose} onPick={handleClusterPickSpot} />}
 
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 12, zIndex: 5, backgroundColor: C.white, paddingTop: 12 }}>
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 12, zIndex: 500, backgroundColor: C.white, paddingTop: 12, boxShadow: '0 -8px 20px rgba(0,0,0,0.06)' }}>
         <div style={{ padding: '0 16px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, fontWeight: 700, color: C.ink }}>
             {allSpots.length} spots near you
@@ -1057,7 +1057,8 @@ function FindView({ listings, onSpotTap }) {
         </div>
         <div style={{
           display: 'flex', gap: 12, padding: '0 16px 4px',
-          overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none',
+          overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none',
+          minHeight: 220,
         }}>
           {allSpots.slice(0, 4).map((spot) => (
             <MiniSpotCard key={spot.id} spot={spot} onTap={onSpotTap} />
