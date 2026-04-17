@@ -2366,6 +2366,17 @@ function BottomNav({ tab, setTab }) {
 // ============================================================================
 export default function Turnout() {
   useFonts();
+  useEffect(() => {
+    const BG = '#D0E4EF';
+    const prevBody = document.body.style.backgroundColor;
+    const prevHtml = document.documentElement.style.backgroundColor;
+    document.body.style.backgroundColor = BG;
+    document.documentElement.style.backgroundColor = BG;
+    return () => {
+      document.body.style.backgroundColor = prevBody;
+      document.documentElement.style.backgroundColor = prevHtml;
+    };
+  }, []);
   const [view, setView] = useState('welcome');
   const [tab, setTab] = useState('find');
   const [selectedSpot, setSelectedSpot] = useState(null);
