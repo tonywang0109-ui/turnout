@@ -170,13 +170,10 @@ if (typeof window !== 'undefined' && !window.storage) {
     // BOOKINGS
     // ========================================================================
     createBooking: async ({ listing_id, host_id, start_time, end_time, total_hours, total_price }) => {
-      console.log('[turnout] createBooking start', { listing_id, host_id })
       const user = await getCurrentUser()
-      console.log('[turnout] got user:', user?.id)
       if (!user) return { error: 'not_signed_in' }
       if (user.id === host_id) return { error: 'cannot_book_own_listing' }
 
-      console.log('[turnout] checking conflicts...')
       const { data: conflicts, error: conflictError } = await withTimeout(
         supabase
           .from('bookings')
@@ -188,14 +185,12 @@ if (typeof window !== 'undefined' && !window.storage) {
         8000,
         'bookings.conflict-check'
       )
-      console.log('[turnout] conflict check done', { conflicts, conflictError })
       if (conflictError) {
         return { error: 'conflict_check_failed', detail: conflictError.message }
       }
       if (conflicts && conflicts.length > 0) {
         return { error: 'time_conflict' }
       }
-      console.log('[turnout] inserting booking...')
       const { data, error } = await withTimeout(
         supabase.from('bookings').insert({
           listing_id,
@@ -210,7 +205,6 @@ if (typeof window !== 'undefined' && !window.storage) {
         8000,
         'bookings.insert'
       )
-      console.log('[turnout] insert done', { data, error })
       if (error) {
         return { error: 'insert_failed', detail: error.message }
       }
@@ -234,16 +228,13 @@ if (typeof window !== 'undefined' && !window.storage) {
     },
 
     fetchMyBookings: async () => {
-      console.log('[turnout] fetchMyBookings start')
       const user = await getCurrentUser()
-      console.log('[turnout] fetchMyBookings user:', user?.id)
       if (!user) return []
       const { data, error } = await withTimeout(
         supabase.from('bookings').select('*, listing:listings(*)').eq('renter_id', user.id).order('created_at', { ascending: false }),
         8000,
         'bookings.fetch-renter'
       )
-      console.log('[turnout] fetchMyBookings done', { count: data?.length, error })
       if (error) return []
       if (!data || data.length === 0) return []
       // Enrich with host emails for approved bookings
@@ -253,16 +244,13 @@ if (typeof window !== 'undefined' && !window.storage) {
     },
 
     fetchBookingsForHost: async () => {
-      console.log('[turnout] fetchBookingsForHost start')
       const user = await getCurrentUser()
-      console.log('[turnout] fetchBookingsForHost user:', user?.id)
       if (!user) return []
       const { data, error } = await withTimeout(
         supabase.from('bookings').select('*, listing:listings(*)').eq('host_id', user.id).order('created_at', { ascending: false }),
         8000,
         'bookings.fetch-host'
       )
-      console.log('[turnout] fetchBookingsForHost done', { count: data?.length, error })
       if (error) return []
       if (!data || data.length === 0) return []
       // Enrich with renter emails for approved bookings
