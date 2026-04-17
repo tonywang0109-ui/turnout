@@ -1038,7 +1038,7 @@ function FindView({ listings, onSpotTap }) {
         </div>
       </div>
 
-      <div style={{ width: '100%', height: 'calc(100dvh - 180px)', paddingTop: 78, boxSizing: 'border-box' }}>
+      <div style={{ width: '100%', height: 'calc(100dvh - 78px)', paddingTop: 78, boxSizing: 'border-box' }}>
         <MapErrorBoundary childProps={{ spots: [], userListings: listings, onSpotTap }}>
           <VanMap spots={[]} userListings={listings} onSpotTap={onSpotTap} onClusterTap={handleClusterTap} />
         </MapErrorBoundary>
@@ -1046,7 +1046,7 @@ function FindView({ listings, onSpotTap }) {
 
       {clusterGroup && <ClusterSheet group={clusterGroup} onClose={handleClusterClose} onPick={handleClusterPickSpot} />}
 
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 12, zIndex: 500, backgroundColor: C.white, paddingTop: 12, boxShadow: '0 -8px 20px rgba(0,0,0,0.06)' }}>
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 12, zIndex: 500, paddingTop: 12 }}>
         <div style={{ padding: '0 16px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, fontWeight: 700, color: C.ink }}>
             {allSpots.length} spots near you
