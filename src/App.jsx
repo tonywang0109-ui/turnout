@@ -1012,7 +1012,7 @@ function FindView({ listings, onSpotTap }) {
     onSpotTap(spot);
   };
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: C.white }}>
+    <div style={{ position: 'relative', width: '100%', height: 'calc(100dvh - 78px)', backgroundColor: C.white }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
         padding: '16px 16px 12px',
