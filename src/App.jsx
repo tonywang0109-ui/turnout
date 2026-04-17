@@ -181,7 +181,13 @@ function useFonts() {
     link.href = 'https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&display=swap';
     link.rel = 'stylesheet';
     document.head.appendChild(link);
-    return () => { try { document.head.removeChild(link); } catch {} };
+    const style = document.createElement('style');
+    style.textContent = '@keyframes turnoutSpin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+    return () => {
+      try { document.head.removeChild(link); } catch {}
+      try { document.head.removeChild(style); } catch {}
+    };
   }, []);
 }
 
@@ -1997,11 +2003,23 @@ function AddSpotForm({ onCancel, onSave, initial = null }) {
       </div>
       <div style={{ padding: '14px 20px', borderTop: `1px solid ${C.line}` }}>
         <button onClick={handleSave} disabled={!canSave} style={{
-          width: '100%', backgroundColor: canSave ? C.ink : C.line, color: C.white, border: 'none',
+          width: '100%',
+          backgroundColor: saving ? C.greenMid : (canSave ? C.ink : C.line),
+          color: C.white, border: 'none',
           padding: '18px 24px', fontFamily: '"Inter", sans-serif', fontSize: 16, fontWeight: 700,
-          cursor: canSave ? 'pointer' : 'not-allowed', borderRadius: 14,
+          cursor: canSave ? 'pointer' : (saving ? 'wait' : 'not-allowed'), borderRadius: 14,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
         }}>
-          {isEdit ? 'Save changes' : 'Publish spot'}
+          {saving && (
+            <span style={{
+              width: 16, height: 16, borderRadius: '50%',
+              border: '2px solid rgba(255,255,255,0.3)',
+              borderTopColor: C.white,
+              animation: 'turnoutSpin 0.8s linear infinite',
+              display: 'inline-block',
+            }} />
+          )}
+          {saving ? 'Finding address…' : (isEdit ? 'Save changes' : 'Publish spot')}
         </button>
       </div>
     </div>
