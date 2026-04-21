@@ -211,12 +211,19 @@ if (typeof window !== 'undefined' && !window.storage) {
       return { data }
     },
 
-    updateBookingStatus: async (id, status) => {
+    // updateBookingStatus now accepts an optional `extra` object.
+    // When approving, the host can pass { host_contact: {...} } to share
+    // contact/payment info with the renter. Pass null to clear previous value.
+    updateBookingStatus: async (id, status, extra = null) => {
       if (!id || !status) return { error: 'missing_params' }
       const allowed = ['pending', 'approved', 'declined', 'cancelled']
       if (!allowed.includes(status)) return { error: 'invalid_status' }
+      const payload = { status, updated_at: new Date().toISOString() }
+      if (extra && typeof extra === 'object' && 'host_contact' in extra) {
+        payload.host_contact = extra.host_contact
+      }
       const { data, error } = await withTimeout(
-        supabase.from('bookings').update({ status, updated_at: new Date().toISOString() }).eq('id', id).select().single(),
+        supabase.from('bookings').update(payload).eq('id', id).select().single(),
         8000,
         'bookings.update-status'
       )

@@ -1684,12 +1684,267 @@ function BookingRequestSent({ booking, onDone }) {
 // HOST VIEW
 // ============================================================================
 // ============================================================================
+// CONTACT BOX (shown under approved bookings on both host and renter side)
+// ============================================================================
+function ContactBox({ email, contact, label }) {
+  const hasContact = contact && typeof contact === 'object' && Object.keys(contact).length > 0;
+  if (!email && !hasContact) return null;
+
+  const linkStyle = { color: C.green, fontWeight: 700, textDecoration: 'none', wordBreak: 'break-all' };
+  const row = (k, value) => (
+    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginTop: 4 }}>
+      <span style={{ color: C.inkMute, fontWeight: 600, flexShrink: 0 }}>{k}</span>
+      <span style={{ textAlign: 'right', minWidth: 0, flex: 1 }}>{value}</span>
+    </div>
+  );
+  const digits = (s) => (s || '').replace(/[^\d+]/g, '');
+
+  return (
+    <div style={{
+      marginTop: 10, padding: '12px 14px', backgroundColor: C.greenSoft,
+      borderRadius: 10, fontFamily: '"Inter", sans-serif', fontSize: 12,
+    }}>
+      <div style={{ color: C.inkMute, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: 10, marginBottom: 6 }}>
+        {label}
+      </div>
+      {email && row('Email', <a href={`mailto:${email}`} style={linkStyle}>{email}</a>)}
+      {contact?.phone && row('Phone', <a href={`tel:${digits(contact.phone)}`} style={linkStyle}>{contact.phone}</a>)}
+      {contact?.venmo && row('Venmo', <a href={`https://venmo.com/${contact.venmo}`} target="_blank" rel="noopener noreferrer" style={linkStyle}>@{contact.venmo}</a>)}
+      {contact?.cashapp && row('Cash App', <a href={`https://cash.app/$${contact.cashapp}`} target="_blank" rel="noopener noreferrer" style={linkStyle}>${contact.cashapp}</a>)}
+      {contact?.zelle && row('Zelle', <span style={{ color: C.ink, fontWeight: 700 }}>{contact.zelle}</span>)}
+      {contact?.etransfer && row('e-Transfer', <span style={{ color: C.ink, fontWeight: 700 }}>{contact.etransfer}</span>)}
+      {contact?.paypal && row('PayPal', <a href={`https://paypal.me/${contact.paypal}`} target="_blank" rel="noopener noreferrer" style={linkStyle}>paypal.me/{contact.paypal}</a>)}
+      {contact?.note && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid rgba(0,0,0,0.06)` }}>
+          <div style={{ color: C.inkMute, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: 10, marginBottom: 4 }}>
+            Note
+          </div>
+          <div style={{ color: C.ink, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{contact.note}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// APPROVE BOOKING MODAL (host enters optional contact info before approving)
+// ============================================================================
+function ApproveBookingModal({ booking, onClose, onApprove, isBusy }) {
+  const hostId = booking.host_id;
+  const storageKey = `turnout:host_contact:${hostId || 'anon'}`;
+
+  // Load saved contact defaults for this host (handles only; note is always fresh)
+  const saved = (() => {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(storageKey) : null;
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  })();
+
+  const [phone, setPhone] = useState(saved.phone || '');
+  const [venmo, setVenmo] = useState(saved.venmo || '');
+  const [cashapp, setCashapp] = useState(saved.cashapp || '');
+  const [zelle, setZelle] = useState(saved.zelle || '');
+  const [etransfer, setEtransfer] = useState(saved.etransfer || '');
+  const [paypal, setPaypal] = useState(saved.paypal || '');
+  const [note, setNote] = useState('');
+
+  const buildContact = () => {
+    const c = {};
+    if (phone.trim()) c.phone = phone.trim();
+    if (venmo.trim()) c.venmo = venmo.trim().replace(/^@+/, '');
+    if (cashapp.trim()) c.cashapp = cashapp.trim().replace(/^\$+/, '');
+    if (zelle.trim()) c.zelle = zelle.trim();
+    if (etransfer.trim()) c.etransfer = etransfer.trim();
+    if (paypal.trim()) c.paypal = paypal.trim().replace(/^paypal\.me\//i, '');
+    if (note.trim()) c.note = note.trim();
+    return Object.keys(c).length > 0 ? c : null;
+  };
+
+  const handleApproveWithInfo = () => {
+    const contact = buildContact();
+    // Save the reusable handles (not the per-booking note) for next time
+    if (contact) {
+      const toSave = { ...contact };
+      delete toSave.note;
+      try {
+        if (Object.keys(toSave).length > 0) {
+          localStorage.setItem(storageKey, JSON.stringify(toSave));
+        }
+      } catch (err) {
+        console.warn('Could not save host contact defaults:', err);
+      }
+    }
+    onApprove(contact);
+  };
+
+  const handleSkip = () => onApprove(null);
+
+  const fmtDT = (iso) => new Date(iso).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  });
+
+  const labelStyle = {
+    fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 700,
+    color: C.inkMute, letterSpacing: '0.05em', textTransform: 'uppercase',
+    marginBottom: 6, marginTop: 14,
+  };
+  const inputStyle = {
+    width: '100%', padding: '12px 14px', fontFamily: '"Inter", sans-serif', fontSize: 15,
+    border: `1px solid ${C.line}`, backgroundColor: C.white, color: C.ink, borderRadius: 10,
+    outline: 'none', boxSizing: 'border-box', fontWeight: 500,
+  };
+  const prefixWrap = {
+    display: 'flex', alignItems: 'stretch', border: `1px solid ${C.line}`,
+    borderRadius: 10, backgroundColor: C.white, overflow: 'hidden',
+  };
+  const prefixLabel = {
+    display: 'flex', alignItems: 'center', padding: '0 12px',
+    backgroundColor: C.bg, color: C.inkMute, fontFamily: '"Inter", sans-serif',
+    fontSize: 14, fontWeight: 600, borderRight: `1px solid ${C.line}`,
+  };
+  const prefixInput = {
+    flex: 1, padding: '12px 14px', fontFamily: '"Inter", sans-serif', fontSize: 15,
+    border: 'none', backgroundColor: 'transparent', color: C.ink, outline: 'none',
+    boxSizing: 'border-box', fontWeight: 500, minWidth: 0,
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 1000,
+      display: 'flex', alignItems: 'stretch', justifyContent: 'center',
+    }}>
+      <div style={{
+        width: '100%', maxWidth: 440, backgroundColor: C.white,
+        display: 'flex', flexDirection: 'column', height: '100dvh', maxHeight: '100dvh',
+        overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '14px 16px', borderBottom: `1px solid ${C.line}`,
+          display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+        }}>
+          <button onClick={onClose} disabled={isBusy} style={{
+            width: 36, height: 36, borderRadius: '50%', border: `1px solid ${C.line}`,
+            backgroundColor: C.white, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+          }}>
+            <X size={18} color={C.ink} />
+          </button>
+          <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 16, fontWeight: 700, color: C.ink }}>
+            Approve booking
+          </div>
+        </div>
+
+        {/* Scrollable body */}
+        <div style={{ flex: 1, overflow: 'auto', minHeight: 0, WebkitOverflowScrolling: 'touch', padding: '16px 20px 20px' }}>
+          {/* Booking summary */}
+          <div style={{
+            padding: 14, backgroundColor: C.bg, borderRadius: 12, marginBottom: 18,
+          }}>
+            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 14, fontWeight: 700, color: C.ink, marginBottom: 2 }}>
+              {booking.listing?.title || 'Your listing'}
+            </div>
+            {booking.listing?.address && (
+              <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 12, color: C.inkMute, marginBottom: 8 }}>
+                {booking.listing.address}
+              </div>
+            )}
+            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.inkSoft, marginBottom: 2 }}>
+              {fmtDT(booking.start_time)} → {fmtDT(booking.end_time)}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: '"Inter", sans-serif', fontSize: 13, fontWeight: 700, color: C.ink }}>
+              <span>{booking.total_hours} hr</span>
+              <span>${booking.total_price}</span>
+            </div>
+          </div>
+
+          <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 16, fontWeight: 700, color: C.ink, marginBottom: 6 }}>
+            Share contact info <span style={{ color: C.inkMute, fontWeight: 500 }}>(optional)</span>
+          </div>
+          <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.inkSoft, lineHeight: 1.45, marginBottom: 4 }}>
+            Your email is always shared with the renter on approval. Add any of the below so the renter can reach you and send payment directly.
+          </div>
+
+          <div style={labelStyle}>Phone</div>
+          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="310-555-1234" style={inputStyle} />
+
+          <div style={labelStyle}>Venmo</div>
+          <div style={prefixWrap}>
+            <div style={prefixLabel}>@</div>
+            <input value={venmo} onChange={(e) => setVenmo(e.target.value)} placeholder="your-handle" style={prefixInput} autoCapitalize="none" autoCorrect="off" />
+          </div>
+
+          <div style={labelStyle}>Cash App</div>
+          <div style={prefixWrap}>
+            <div style={prefixLabel}>$</div>
+            <input value={cashapp} onChange={(e) => setCashapp(e.target.value)} placeholder="yourhandle" style={prefixInput} autoCapitalize="none" autoCorrect="off" />
+          </div>
+
+          <div style={labelStyle}>Zelle</div>
+          <input value={zelle} onChange={(e) => setZelle(e.target.value)} placeholder="Phone or email" style={inputStyle} autoCapitalize="none" autoCorrect="off" />
+
+          <div style={labelStyle}>Interac e-Transfer</div>
+          <input value={etransfer} onChange={(e) => setEtransfer(e.target.value)} placeholder="Email" style={inputStyle} autoCapitalize="none" autoCorrect="off" />
+
+          <div style={labelStyle}>PayPal</div>
+          <div style={prefixWrap}>
+            <div style={prefixLabel}>paypal.me/</div>
+            <input value={paypal} onChange={(e) => setPaypal(e.target.value)} placeholder="yourhandle" style={prefixInput} autoCapitalize="none" autoCorrect="off" />
+          </div>
+
+          <div style={labelStyle}>Note to renter</div>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="e.g. Stall #34, garage code 2847. Please text me 30 min before arrival."
+            rows={3}
+            style={{ ...inputStyle, resize: 'vertical', fontFamily: '"Inter", sans-serif', lineHeight: 1.4 }}
+          />
+        </div>
+
+        {/* Sticky footer */}
+        <div style={{
+          padding: '12px 16px 18px', borderTop: `1px solid ${C.line}`,
+          backgroundColor: C.white, flexShrink: 0,
+        }}>
+          <div style={{
+            fontFamily: '"Inter", sans-serif', fontSize: 11, color: C.inkMute,
+            lineHeight: 1.45, marginBottom: 10, textAlign: 'center',
+          }}>
+            Turnout doesn&#39;t process payments or mediate disputes. Arrange payment directly with your renter.
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleSkip} disabled={isBusy} style={{
+              flex: 1, padding: '12px', border: `1px solid ${C.line}`,
+              backgroundColor: C.white, color: C.ink, borderRadius: 12, cursor: 'pointer',
+              fontFamily: '"Inter", sans-serif', fontSize: 14, fontWeight: 600,
+            }}>
+              Skip
+            </button>
+            <button onClick={handleApproveWithInfo} disabled={isBusy} style={{
+              flex: 2, padding: '12px', border: 'none',
+              backgroundColor: C.green, color: C.white, borderRadius: 12, cursor: 'pointer',
+              fontFamily: '"Inter", sans-serif', fontSize: 14, fontWeight: 700,
+            }}>
+              {isBusy ? '…' : 'Approve & share'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // HOST BOOKINGS LIST (shown inside HostView)
 // ============================================================================
 function HostBookingsList({ userId, refreshKey, onUpdate }) {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
+  const [pendingApprove, setPendingApprove] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -1720,6 +1975,25 @@ function HostBookingsList({ userId, refreshKey, onUpdate }) {
     if (result?.data) {
       setBookings((bs) => bs.map((b) => (b.id === id ? { ...b, status: newStatus } : b)));
       if (onUpdate) onUpdate();
+    }
+  };
+
+  const handleApproveWithContact = async (id, host_contact) => {
+    setBusyId(id);
+    const result = await window.storage.updateBookingStatus(id, 'approved', { host_contact });
+    setBusyId(null);
+    if (result?.data) {
+      setBookings((bs) => bs.map((b) => (b.id === id ? { ...b, status: 'approved', host_contact } : b)));
+      if (onUpdate) onUpdate();
+      setPendingApprove(null);
+    } else if (result?.error) {
+      const detail = result.detail || result.error;
+      if (String(detail).toLowerCase().includes('host_contact')) {
+        alert('The booking approved, but saving contact info failed. The "host_contact" column is missing from your bookings table. See the SQL migration instructions from Claude.');
+      } else {
+        alert(`Could not approve: ${detail}`);
+      }
+      setPendingApprove(null);
     }
   };
 
@@ -1777,25 +2051,20 @@ function HostBookingsList({ userId, refreshKey, onUpdate }) {
           <span>{b.total_hours} hr</span>
           <span>${b.total_price}</span>
         </div>
-        {b.status === 'approved' && b._counterparty_email && (
-          <div style={{
-            marginTop: 10, padding: '10px 12px', backgroundColor: C.greenSoft,
-            borderRadius: 10, fontFamily: '"Inter", sans-serif', fontSize: 12,
-          }}>
-            <div style={{ color: C.inkMute, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: 10, marginBottom: 2 }}>
-              Renter contact
-            </div>
-            <a href={`mailto:${b._counterparty_email}`} style={{ color: C.green, fontWeight: 700, textDecoration: 'none' }}>
-              {b._counterparty_email}
-            </a>
-          </div>
+        {b.status === 'approved' && (b._counterparty_email || b.host_contact) && (
+          <>
+            <ContactBox email={b._counterparty_email} contact={null} label="Renter contact" />
+            {b.host_contact && (
+              <ContactBox email={null} contact={b.host_contact} label="What you shared" />
+            )}
+          </>
         )}
         {(canApproveDecline || canCancel) && (
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
             {canApproveDecline && (
               <>
                 <button disabled={busy} onClick={() => handleAction(b.id, 'declined')} style={btnSecondary}>Decline</button>
-                <button disabled={busy} onClick={() => handleAction(b.id, 'approved')} style={btnPrimary}>
+                <button disabled={busy} onClick={() => setPendingApprove(b)} style={btnPrimary}>
                   {busy ? '…' : 'Approve'}
                 </button>
               </>
@@ -1824,6 +2093,14 @@ function HostBookingsList({ userId, refreshKey, onUpdate }) {
           </div>
           {other.map(renderCard)}
         </>
+      )}
+      {pendingApprove && (
+        <ApproveBookingModal
+          booking={pendingApprove}
+          onClose={() => setPendingApprove(null)}
+          onApprove={(contact) => handleApproveWithContact(pendingApprove.id, contact)}
+          isBusy={busyId === pendingApprove.id}
+        />
       )}
     </div>
   );
@@ -2231,18 +2508,8 @@ function TripsView({ session, refreshKey, onCancel }) {
                 <span>{b.total_hours} hr</span>
                 <span>${b.total_price}</span>
               </div>
-              {b.status === 'approved' && b._counterparty_email && (
-                <div style={{
-                  marginTop: 10, padding: '10px 12px', backgroundColor: C.greenSoft,
-                  borderRadius: 10, fontFamily: '"Inter", sans-serif', fontSize: 12,
-                }}>
-                  <div style={{ color: C.inkMute, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: 10, marginBottom: 2 }}>
-                    Host contact
-                  </div>
-                  <a href={`mailto:${b._counterparty_email}`} style={{ color: C.green, fontWeight: 700, textDecoration: 'none' }}>
-                    {b._counterparty_email}
-                  </a>
-                </div>
+              {b.status === 'approved' && (b._counterparty_email || b.host_contact) && (
+                <ContactBox email={b._counterparty_email} contact={b.host_contact} label="Host contact" />
               )}
               {canCancel && (
                 <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
