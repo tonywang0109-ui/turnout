@@ -417,6 +417,28 @@ function cityNameFromId(id) {
 // the fields a renter is likely to type: title, address, neighborhood, type, description.
 // Also matches by city name — typing "Vancouver" matches any listing whose coords
 // fall in Vancouver's bounding box, even if "Vancouver" isn't in any text field.
+// Great-circle distance between two lat/lng points, in kilometers.
+// Uses the Haversine formula. Good enough at city scale (<1% error).
+function haversineKm(lat1, lng1, lat2, lng2) {
+  if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return null;
+  const a1 = Number(lat1), n1 = Number(lng1), a2 = Number(lat2), n2 = Number(lng2);
+  if (Number.isNaN(a1) || Number.isNaN(n1) || Number.isNaN(a2) || Number.isNaN(n2)) return null;
+  const R = 6371;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(a2 - a1);
+  const dLng = toRad(n2 - n1);
+  const h = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a1)) * Math.cos(toRad(a2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(Math.min(1, h)));
+}
+
+// Format a distance in km to a friendly label: "420 m" under 1km, "1.2 km" above.
+function formatDistanceKm(km) {
+  if (km == null || !isFinite(km)) return null;
+  if (km < 1) return `${Math.max(0, Math.round(km * 1000))} m`;
+  return `${km.toFixed(1)} km`;
+}
+
 function listingMatchesQuery(listing, query) {
   if (!query) return true;
   const q = String(query).trim().toLowerCase();
@@ -1141,6 +1163,7 @@ function FindView({ listings, onSpotTap }) {
   const [selectedCity, setSelectedCity] = useState('all');
   const [clusterGroup, setClusterGroup] = useState(null);
   const [showSearch, setShowSearch] = useState(false);
+  const [showAllSpots, setShowAllSpots] = useState(false);
   const [textQuery, setTextQuery] = useState('');
   const [searchLocation, setSearchLocation] = useState(null);
   const handleClusterTap = (group) => setClusterGroup(group);
@@ -1161,6 +1184,9 @@ function FindView({ listings, onSpotTap }) {
   }, [listings]);
 
   // Filter listings: city chip AND text query.
+  // Additionally, when a search location is set, compute real distance from it
+  // and sort nearest-first. The computed distance rides along as `_distance`
+  // so the cards can display it.
   const filteredListings = React.useMemo(() => {
     let list = listings;
     if (selectedCity !== 'all') {
@@ -1169,8 +1195,16 @@ function FindView({ listings, onSpotTap }) {
     if (textQuery && textQuery.trim()) {
       list = list.filter((l) => listingMatchesQuery(l, textQuery));
     }
+    if (searchLocation && searchLocation.lat != null && searchLocation.lng != null) {
+      list = list
+        .map((l) => {
+          const km = haversineKm(searchLocation.lat, searchLocation.lng, l.lat, l.lng);
+          return { ...l, _distance: km == null ? Infinity : km };
+        })
+        .sort((a, b) => a._distance - b._distance);
+    }
     return list;
-  }, [listings, selectedCity, textQuery]);
+  }, [listings, selectedCity, textQuery, searchLocation]);
 
   const allSpots = [...filteredListings];
 
@@ -1329,9 +1363,15 @@ function FindView({ listings, onSpotTap }) {
           <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, fontWeight: 700, color: C.ink }}>
             {allSpots.length} {allSpots.length === 1 ? 'spot' : 'spots'} near you
           </div>
-          <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 12, fontWeight: 600, color: C.amber, cursor: 'pointer' }}>
+          <button
+            onClick={() => setShowAllSpots(true)}
+            style={{
+              fontFamily: '"Inter", sans-serif', fontSize: 12, fontWeight: 600, color: C.amber,
+              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+            }}
+          >
             See all →
-          </div>
+          </button>
         </div>
         <div style={{
           display: 'flex', gap: 12, padding: '0 16px 4px',
@@ -1352,6 +1392,15 @@ function FindView({ listings, onSpotTap }) {
           onQueryChange={setTextQuery}
           onPickSpot={handlePickSpotFromSearch}
           onSearchAddress={handleAddressSearch}
+        />
+      )}
+
+      {showAllSpots && (
+        <AllSpotsList
+          spots={filteredListings}
+          title={searchHeadline}
+          onClose={() => setShowAllSpots(false)}
+          onPickSpot={(spot) => { setShowAllSpots(false); onSpotTap(spot); }}
         />
       )}
     </div>
@@ -1653,10 +1702,145 @@ function SearchResultRow({ spot, onTap }) {
 }
 
 // ============================================================================
+// ALL SPOTS LIST (See all overlay)
+// ============================================================================
+function AllSpotsList({ spots, title, onClose, onPickSpot }) {
+  const count = spots.length;
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 2000, backgroundColor: C.white,
+      display: 'flex', flexDirection: 'column',
+    }}>
+      <div style={{
+        padding: '12px 12px 12px 8px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        borderBottom: `1px solid ${C.line}`,
+        backgroundColor: C.white,
+      }}>
+        <button
+          onClick={onClose}
+          style={{
+            width: 40, height: 40, borderRadius: '50%', border: 'none',
+            background: 'transparent', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
+          }}
+          aria-label="Close"
+        >
+          <ChevronLeft size={22} color={C.ink} strokeWidth={2.4} />
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontFamily: '"Inter", sans-serif', fontSize: 15, fontWeight: 700, color: C.ink,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em',
+          }}>
+            {title || 'All spots'}
+          </div>
+          <div style={{
+            fontFamily: '"Inter", sans-serif', fontSize: 11, color: C.inkMute, marginTop: 1,
+          }}>
+            {count} {count === 1 ? 'spot' : 'spots'}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        {count === 0 ? (
+          <div style={{
+            padding: '48px 28px',
+            textAlign: 'center',
+            color: C.inkMute,
+            fontFamily: '"Inter", sans-serif',
+            fontSize: 13,
+            lineHeight: 1.6,
+          }}>
+            No spots to show here. Try clearing the filter or searching a new area.
+          </div>
+        ) : (
+          spots.map((spot) => (
+            <AllSpotsRow key={spot.id} spot={spot} onTap={() => onPickSpot(spot)} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Row used inside AllSpotsList. Similar to SearchResultRow but bigger thumbnail
+// and includes distance + rating where available.
+function AllSpotsRow({ spot, onTap }) {
+  const coverSrc = Array.isArray(spot.photos) && spot.photos.length > 0 ? spot.photos[0] : null;
+  const computed = spot._distance != null && isFinite(spot._distance) ? formatDistanceKm(spot._distance) : null;
+  const distanceLabel = computed || spot.distance || null;
+  const subParts = [distanceLabel, spot.neighborhood, spot.type].filter(Boolean);
+  return (
+    <button
+      onClick={onTap}
+      style={{
+        width: '100%',
+        padding: '14px 20px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        background: 'none',
+        border: 'none',
+        borderBottom: `1px solid ${C.lineLight}`,
+        cursor: 'pointer',
+        textAlign: 'left',
+      }}
+    >
+      <div style={{
+        width: 72, height: 72, borderRadius: 12, overflow: 'hidden', flexShrink: 0,
+        backgroundColor: C.mapBg,
+      }}>
+        <SpotPhoto type={spot.type} variant="a" src={coverSrc} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10,
+        }}>
+          <div style={{
+            fontFamily: '"Inter", sans-serif', fontSize: 15, fontWeight: 700, color: C.ink,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            flex: 1, minWidth: 0,
+          }}>
+            {spot.title || 'Untitled'}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+            <Star size={11} fill={C.ink} color={C.ink} strokeWidth={0} />
+            <span style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 600, color: C.ink }}>
+              {spot.rating ?? 5}
+            </span>
+          </div>
+        </div>
+        <div style={{
+          fontFamily: '"Inter", sans-serif', fontSize: 12, color: C.inkMute, marginTop: 3,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {subParts.length > 0 ? subParts.join(' · ') : '—'}
+        </div>
+        <div style={{ marginTop: 6 }}>
+          <span style={{ fontFamily: '"Inter", sans-serif', fontSize: 15, fontWeight: 800, color: C.amber }}>
+            ${spot.rate}
+          </span>
+          <span style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, color: C.inkMute, marginLeft: 2, fontWeight: 500 }}>
+            /hr
+          </span>
+        </div>
+      </div>
+      <ArrowRight size={16} color={C.inkMute} strokeWidth={2} />
+    </button>
+  );
+}
+
+// ============================================================================
 // MINI CARD
 // ============================================================================
 function MiniSpotCard({ spot, onTap }) {
   const coverSrc = Array.isArray(spot.photos) && spot.photos.length > 0 ? spot.photos[0] : null;
+  const computed = spot._distance != null && isFinite(spot._distance) ? formatDistanceKm(spot._distance) : null;
+  const distanceLabel = computed || spot.distance || '—';
   return (
     <div onClick={() => onTap(spot)} style={{
       flex: '0 0 260px', backgroundColor: C.white, borderRadius: 16, overflow: 'hidden',
@@ -1685,7 +1869,7 @@ function MiniSpotCard({ spot, onTap }) {
           </div>
         </div>
         <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, color: C.inkMute, marginTop: 2 }}>
-          {spot.distance} · {spot.type}
+          {distanceLabel} · {spot.type}
         </div>
         <div style={{ marginTop: 6 }}>
           <span style={{ fontFamily: '"Inter", sans-serif', fontSize: 14, fontWeight: 800, color: C.ink }}>
