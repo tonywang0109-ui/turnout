@@ -1070,7 +1070,7 @@ function Welcome({ onContinue, onStory }) {
           fontFamily: '"Inter", sans-serif', fontSize: 15, color: C.white,
           opacity: 0.85, lineHeight: 1.5, maxWidth: 340,
         }}>
-          The first marketplace for driveways, condo stalls, and unused parking — built by everyday people, for everyday people.
+          The first marketplace for driveways, condo stalls, and unused parking. Park in someone's driveway. Rent out yours.
         </div>
       </div>
 
