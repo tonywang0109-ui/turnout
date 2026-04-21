@@ -2647,8 +2647,8 @@ export default function Turnout() {
   }
 
   return (
-    <div style={containerStyle}>
-      <div style={{ flex: 1, position: 'relative', overflow: 'auto', minHeight: 'calc(100dvh - 78px)' }}>
+    <div style={{ ...containerStyle, height: '100dvh', overflow: 'hidden' }}>
+      <div style={{ flex: 1, position: 'relative', overflow: 'auto', minHeight: 0, WebkitOverflowScrolling: 'touch' }}>
         {tab === 'find' && <FindView listings={listings} onSpotTap={handleSpotTap} />}
         {tab === 'host' && <HostView listings={listings} userId={session?.user?.id} onAdd={() => setView('addSpot')} onSpotTap={handleSpotTap} onEdit={handleEditSpot} onDelete={handleDeleteSpot} onLogout={handleLogout} bookingsRefreshKey={bookingsRefreshKey} onBookingsChange={handleBookingsChange} />}
         {tab === 'trips' && <TripsView session={session} refreshKey={bookingsRefreshKey} onCancel={handleCancelBooking} />}
