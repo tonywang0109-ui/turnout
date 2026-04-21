@@ -390,6 +390,8 @@ function cityNameFromId(id) {
 
 // Text-match a listing against a query. Case-insensitive, searches across
 // the fields a renter is likely to type: title, address, neighborhood, type, description.
+// Also matches by city name — typing "Vancouver" matches any listing whose coords
+// fall in Vancouver's bounding box, even if "Vancouver" isn't in any text field.
 function listingMatchesQuery(listing, query) {
   if (!query) return true;
   const q = String(query).trim().toLowerCase();
@@ -403,7 +405,15 @@ function listingMatchesQuery(listing, query) {
   ]
     .filter(Boolean)
     .map((s) => String(s).toLowerCase());
-  return fields.some((f) => f.includes(q));
+  if (fields.some((f) => f.includes(q))) return true;
+  // City-name match — if query aligns with a known city, check listing coords.
+  for (const city of CITIES) {
+    const cityName = city.name.toLowerCase();
+    if (cityName.includes(q) || q.includes(cityName)) {
+      if (cityForCoords(listing.lat, listing.lng) === city.id) return true;
+    }
+  }
+  return false;
 }
 
 // ============================================================================
@@ -1167,6 +1177,9 @@ function FindView({ listings, onSpotTap }) {
   };
 
   // Commit an address search: geocode and drop a map pin at the result.
+  // Also clear the text query — the user's intent is now geographic, not
+  // a text filter. Without this, the text filter would continue hiding
+  // listings behind the new map pin.
   const handleAddressSearch = async (rawQuery) => {
     const q = (rawQuery || '').trim();
     if (!q) return { ok: false, reason: 'empty' };
@@ -1174,6 +1187,7 @@ function FindView({ listings, onSpotTap }) {
       const result = await geocodeAddress(q);
       if (!result) return { ok: false, reason: 'notfound' };
       setSearchLocation({ lat: result.lat, lng: result.lng, label: q });
+      setTextQuery('');
       setShowSearch(false);
       return { ok: true };
     } catch (err) {
