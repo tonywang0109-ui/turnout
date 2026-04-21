@@ -329,11 +329,13 @@ function SpotPhoto({ type, variant = 'a', withCameraBadge = false }) {
 
 // ============================================================================
 // GEOCODING (Nominatim — free, no API key, ~1 req/sec limit)
+// Accepts any address the user writes — no hardcoded city suffix.
+// Returns { lat, lng, neighborhood } on success, null on failure.
 // ============================================================================
 async function geocodeAddress(address) {
   try {
-    const query = encodeURIComponent(`${address}, Vancouver, BC, Canada`);
-    const url = `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`;
+    const query = encodeURIComponent(address);
+    const url = `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1&addressdetails=1`;
     const res = await fetch(url, {
       headers: { 'Accept': 'application/json' },
     });
@@ -343,11 +345,47 @@ async function geocodeAddress(address) {
     const lat = parseFloat(data[0].lat);
     const lng = parseFloat(data[0].lon);
     if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
-    return { lat, lng };
+    // Extract a neighborhood-level label from the structured address.
+    // Prefer suburb/neighbourhood, fall back progressively to city-level.
+    const a = data[0].address || {};
+    const neighborhood =
+      a.suburb || a.neighbourhood || a.quarter ||
+      a.city_district || a.borough ||
+      a.city || a.town || a.village || null;
+    return { lat, lng, neighborhood };
   } catch (err) {
     console.warn('Geocoding failed:', err);
     return null;
   }
+}
+
+// ============================================================================
+// CITIES (dual-city support via lat/lng bounding boxes — no DB migration)
+// ============================================================================
+const CITIES = [
+  { id: 'vancouver', name: 'Vancouver', bounds: [[49.0, -123.3], [49.4, -122.5]] },
+  { id: 'la',        name: 'Los Angeles', bounds: [[33.5, -119.0], [34.5, -117.5]] },
+];
+
+function cityForCoords(lat, lng) {
+  if (lat == null || lng == null) return null;
+  const la = Number(lat);
+  const ln = Number(lng);
+  if (Number.isNaN(la) || Number.isNaN(ln)) return null;
+  for (const city of CITIES) {
+    const [[minLat, minLng], [maxLat, maxLng]] = city.bounds;
+    if (la >= minLat && la <= maxLat && ln >= minLng && ln <= maxLng) {
+      return city.id;
+    }
+  }
+  return 'other';
+}
+
+function cityNameFromId(id) {
+  const c = CITIES.find(x => x.id === id);
+  if (c) return c.name;
+  if (id === 'other') return 'Other';
+  return 'Any city';
 }
 
 // ============================================================================
@@ -375,7 +413,7 @@ class MapErrorBoundary extends React.Component {
 // ============================================================================
 // VANCOUVER MAP (LEAFLET)
 // ============================================================================
-function VanMap({ spots, userListings, onSpotTap, onClusterTap }) {
+function VanMap({ spots, userListings, onSpotTap, onClusterTap, cityFilter }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
@@ -389,6 +427,11 @@ function VanMap({ spots, userListings, onSpotTap, onClusterTap }) {
 
   // Coal Harbour center
   const CENTER = [49.2890, -123.1150];
+
+  // When the city filter changes, allow the map to re-frame on the new pin set.
+  useEffect(() => {
+    hasFittedRef.current = false;
+  }, [cityFilter]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -873,7 +916,7 @@ function Welcome({ onContinue, onStory }) {
           color: C.white, letterSpacing: '0.05em', marginBottom: 20,
           alignSelf: 'flex-start',
         }}>
-          ◆ NOW IN VANCOUVER
+          ◆ NOW IN VANCOUVER & LA
         </div>
         <div style={{
           fontFamily: '"Inter", sans-serif', fontSize: 44, fontWeight: 800,
@@ -901,7 +944,7 @@ function Welcome({ onContinue, onStory }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           marginBottom: 14, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
         }}>
-          Explore Vancouver
+          Explore spots
           <ArrowRight size={18} color={C.ink} strokeWidth={2.5} />
         </button>
         <div onClick={onStory} style={{
@@ -979,8 +1022,7 @@ function FounderNote({ onBack }) {
 // FIND VIEW
 // ============================================================================
 function FindView({ listings, onSpotTap }) {
-  // Demo spots removed for real launch — DEMO_SPOTS constant kept for screenshots/dev only
-  const allSpots = [...listings];
+  const [selectedCity, setSelectedCity] = useState('all');
   const [clusterGroup, setClusterGroup] = useState(null);
   const handleClusterTap = (group) => setClusterGroup(group);
   const handleClusterClose = () => setClusterGroup(null);
@@ -988,12 +1030,50 @@ function FindView({ listings, onSpotTap }) {
     setClusterGroup(null);
     onSpotTap(spot);
   };
+
+  // Which cities are actually present in the user's listings?
+  const presentCityIds = React.useMemo(() => {
+    const ids = new Set();
+    for (const l of listings) {
+      const id = cityForCoords(l.lat, l.lng);
+      if (id) ids.add(id);
+    }
+    return ids;
+  }, [listings]);
+
+  // Filter listings based on the selected city chip.
+  const filteredListings = React.useMemo(() => {
+    if (selectedCity === 'all') return listings;
+    return listings.filter(l => cityForCoords(l.lat, l.lng) === selectedCity);
+  }, [listings, selectedCity]);
+
+  const allSpots = [...filteredListings];
+
+  // Chip options: always include 'All'. Add known cities that have listings.
+  // Add 'Other' chip only if some listings fall outside known city bboxes.
+  const chipOptions = [{ id: 'all', name: 'All' }];
+  for (const c of CITIES) {
+    if (presentCityIds.has(c.id)) chipOptions.push({ id: c.id, name: c.name });
+  }
+  if (presentCityIds.has('other')) chipOptions.push({ id: 'other', name: 'Other' });
+
+  // Only show the chip bar if more than one distinct city is present.
+  const showChips = presentCityIds.size >= 2;
+
+  // Search bar headline text — reflects the current filter.
+  const searchHeadline =
+    selectedCity === 'all' ? 'All cities' : cityNameFromId(selectedCity);
+
+  // Dynamically reserve space at the top for the search bar + (optional) chip row.
+  // Base 78px matches the original layout. Chips add ~52px.
+  const topOverlayHeight = showChips ? 130 : 78;
+
   return (
     <div style={{ position: 'relative', width: '100%', height: 'calc(100dvh - 78px)', backgroundColor: C.white }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
         padding: '16px 16px 12px',
-        background: `linear-gradient(to bottom, ${C.mapBg} 70%, transparent 100%)`,
+        backgroundColor: C.mapBg,
       }}>
         <div style={{
           backgroundColor: C.white, borderRadius: 100, padding: '14px 20px',
@@ -1003,7 +1083,7 @@ function FindView({ listings, onSpotTap }) {
           <Search size={18} color={C.ink} strokeWidth={2.5} />
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 14, fontWeight: 600, color: C.ink, lineHeight: 1.2 }}>
-              Coal Harbour, Vancouver
+              {searchHeadline}
             </div>
             <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, color: C.inkMute, lineHeight: 1.2, marginTop: 1 }}>
               {allSpots.length} spots · Any time · Any price
@@ -1013,11 +1093,45 @@ function FindView({ listings, onSpotTap }) {
             <SlidersHorizontal size={16} color={C.ink} strokeWidth={2.2} />
           </div>
         </div>
+
+        {showChips && (
+          <div style={{
+            display: 'flex', gap: 8, marginTop: 10,
+            overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'none', paddingBottom: 2,
+          }}>
+            {chipOptions.map((opt) => {
+              const active = selectedCity === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => setSelectedCity(opt.id)}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 100,
+                    backgroundColor: active ? C.ink : C.white,
+                    color: active ? C.white : C.ink,
+                    border: `1px solid ${active ? C.ink : C.line}`,
+                    fontFamily: '"Inter", sans-serif',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    boxShadow: active ? 'none' : '0 1px 4px rgba(0,0,0,0.04)',
+                  }}
+                >
+                  {opt.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      <div style={{ width: '100%', height: 'calc(100dvh - 78px)', paddingTop: 78, boxSizing: 'border-box' }}>
-        <MapErrorBoundary childProps={{ spots: [], userListings: listings, onSpotTap }}>
-          <VanMap spots={[]} userListings={listings} onSpotTap={onSpotTap} onClusterTap={handleClusterTap} />
+      <div style={{ width: '100%', height: 'calc(100dvh - 78px)', paddingTop: topOverlayHeight, boxSizing: 'border-box' }}>
+        <MapErrorBoundary childProps={{ spots: [], userListings: filteredListings, onSpotTap }}>
+          <VanMap spots={[]} userListings={filteredListings} onSpotTap={onSpotTap} onClusterTap={handleClusterTap} cityFilter={selectedCity} />
         </MapErrorBoundary>
       </div>
 
@@ -1906,7 +2020,7 @@ function HostView({ listings, userId, onAdd, onSpotTap, onEdit, onDelete, onLogo
 function AddSpotForm({ onCancel, onSave, initial = null }) {
   const isEdit = initial !== null;
   const [title, setTitle] = useState(initial?.title || '');
-  const [address, setAddress] = useState(initial?.address || '1077 W Cordova St');
+  const [address, setAddress] = useState(initial?.address || '');
   const [rate, setRate] = useState(String(initial?.rate ?? '5'));
   const [type, setType] = useState(initial?.type || 'Underground');
   const [available, setAvailable] = useState(initial?.available || 'Mon–Fri, 8am–6pm');
@@ -1937,7 +2051,9 @@ function AddSpotForm({ onCancel, onSave, initial = null }) {
       return;
     }
     const newSpot = {
-      id: uid(), title, neighborhood: 'Coal Harbour', address,
+      id: uid(), title,
+      neighborhood: coords?.neighborhood || cityNameFromId(cityForCoords(coords?.lat, coords?.lng)) || '',
+      address,
       distance: '0.0 km', rate: parseFloat(rate), type,
       rating: 5.0, reviews: 0, host: 'You', hostYears: 0,
       description: description || 'Your spot.',
