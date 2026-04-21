@@ -388,6 +388,24 @@ function cityNameFromId(id) {
   return 'Any city';
 }
 
+// Text-match a listing against a query. Case-insensitive, searches across
+// the fields a renter is likely to type: title, address, neighborhood, type, description.
+function listingMatchesQuery(listing, query) {
+  if (!query) return true;
+  const q = String(query).trim().toLowerCase();
+  if (!q) return true;
+  const fields = [
+    listing.title,
+    listing.address,
+    listing.neighborhood,
+    listing.type,
+    listing.description,
+  ]
+    .filter(Boolean)
+    .map((s) => String(s).toLowerCase());
+  return fields.some((f) => f.includes(q));
+}
+
 // ============================================================================
 // MAP ERROR BOUNDARY
 // ============================================================================
@@ -413,10 +431,11 @@ class MapErrorBoundary extends React.Component {
 // ============================================================================
 // VANCOUVER MAP (LEAFLET)
 // ============================================================================
-function VanMap({ spots, userListings, onSpotTap, onClusterTap, cityFilter }) {
+function VanMap({ spots, userListings, onSpotTap, onClusterTap, cityFilter, searchLocation }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
+  const searchMarkerRef = useRef(null);
   const hasFittedRef = useRef(false);
   const [tilesFailed, setTilesFailed] = useState(false);
 
@@ -428,10 +447,72 @@ function VanMap({ spots, userListings, onSpotTap, onClusterTap, cityFilter }) {
   // Coal Harbour center
   const CENTER = [49.2890, -123.1150];
 
-  // When the city filter changes, allow the map to re-frame on the new pin set.
+  // When the city filter changes, allow the map to re-frame on the new pin set —
+  // unless there's an active search location, in which case the search takes precedence.
   useEffect(() => {
-    hasFittedRef.current = false;
+    if (!searchLocation) {
+      hasFittedRef.current = false;
+    }
   }, [cityFilter]);
+
+  // Manage the search-location marker. When searchLocation is set, drop a distinct
+  // pin at those coords and fly the map to it. When cleared, remove the marker
+  // and allow the next pin-update to re-fit to the listing pins.
+  useEffect(() => {
+    const L = typeof window !== 'undefined' ? window.L : null;
+    const map = mapInstanceRef.current;
+    if (!L || !map) return;
+
+    // Always clean up any existing search marker first.
+    if (searchMarkerRef.current) {
+      searchMarkerRef.current.remove();
+      searchMarkerRef.current = null;
+    }
+
+    if (searchLocation && searchLocation.lat != null && searchLocation.lng != null) {
+      const { lat, lng, label } = searchLocation;
+      const safeLabel = (label || 'Searched').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const html = `
+        <div style="
+          background:${C.ink};
+          color:${C.white};
+          border:2px solid ${C.white};
+          border-radius:18px;
+          padding:6px 12px 6px 10px;
+          font-family:Inter,sans-serif;
+          font-size:12px;
+          font-weight:600;
+          white-space:nowrap;
+          box-shadow:0 4px 12px rgba(0,0,0,0.3);
+          display:flex;
+          align-items:center;
+          gap:6px;
+          max-width:200px;
+        ">
+          <span style="font-size:13px;line-height:1;">🔍</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;">${safeLabel}</span>
+        </div>
+      `;
+      const icon = L.divIcon({
+        className: 'turnout-search-pin',
+        html,
+        iconSize: null,
+        iconAnchor: [24, 14],
+      });
+      const marker = L.marker([lat, lng], { icon, zIndexOffset: 1000 }).addTo(map);
+      searchMarkerRef.current = marker;
+      try {
+        map.flyTo([lat, lng], 15, { duration: 0.8 });
+      } catch (err) {
+        map.setView([lat, lng], 15);
+      }
+      // Searched location takes priority — suppress next automatic pin fit.
+      hasFittedRef.current = true;
+    } else {
+      // Search was cleared — let the next pin update re-fit to all pins.
+      hasFittedRef.current = false;
+    }
+  }, [searchLocation]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -1024,6 +1105,9 @@ function FounderNote({ onBack }) {
 function FindView({ listings, onSpotTap }) {
   const [selectedCity, setSelectedCity] = useState('all');
   const [clusterGroup, setClusterGroup] = useState(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [textQuery, setTextQuery] = useState('');
+  const [searchLocation, setSearchLocation] = useState(null);
   const handleClusterTap = (group) => setClusterGroup(group);
   const handleClusterClose = () => setClusterGroup(null);
   const handleClusterPickSpot = (spot) => {
@@ -1041,11 +1125,17 @@ function FindView({ listings, onSpotTap }) {
     return ids;
   }, [listings]);
 
-  // Filter listings based on the selected city chip.
+  // Filter listings: city chip AND text query.
   const filteredListings = React.useMemo(() => {
-    if (selectedCity === 'all') return listings;
-    return listings.filter(l => cityForCoords(l.lat, l.lng) === selectedCity);
-  }, [listings, selectedCity]);
+    let list = listings;
+    if (selectedCity !== 'all') {
+      list = list.filter((l) => cityForCoords(l.lat, l.lng) === selectedCity);
+    }
+    if (textQuery && textQuery.trim()) {
+      list = list.filter((l) => listingMatchesQuery(l, textQuery));
+    }
+    return list;
+  }, [listings, selectedCity, textQuery]);
 
   const allSpots = [...filteredListings];
 
@@ -1060,13 +1150,43 @@ function FindView({ listings, onSpotTap }) {
   // Only show the chip bar if more than one distinct city is present.
   const showChips = presentCityIds.size >= 2;
 
-  // Search bar headline text — reflects the current filter.
-  const searchHeadline =
-    selectedCity === 'all' ? 'All cities' : cityNameFromId(selectedCity);
+  // Search bar headline — reflects active search first, then city filter.
+  const hasActiveSearch = Boolean((textQuery && textQuery.trim()) || searchLocation);
+  const searchHeadline = hasActiveSearch
+    ? (searchLocation?.label || textQuery.trim())
+    : (selectedCity === 'all' ? 'All cities' : cityNameFromId(selectedCity));
 
   // Dynamically reserve space at the top for the search bar + (optional) chip row.
   // Base 78px matches the original layout. Chips add ~52px.
   const topOverlayHeight = showChips ? 130 : 78;
+
+  // Clear all active search state (text + map pin).
+  const clearSearch = () => {
+    setTextQuery('');
+    setSearchLocation(null);
+  };
+
+  // Commit an address search: geocode and drop a map pin at the result.
+  const handleAddressSearch = async (rawQuery) => {
+    const q = (rawQuery || '').trim();
+    if (!q) return { ok: false, reason: 'empty' };
+    try {
+      const result = await geocodeAddress(q);
+      if (!result) return { ok: false, reason: 'notfound' };
+      setSearchLocation({ lat: result.lat, lng: result.lng, label: q });
+      setShowSearch(false);
+      return { ok: true };
+    } catch (err) {
+      console.warn('Address search failed:', err);
+      return { ok: false, reason: 'error' };
+    }
+  };
+
+  // Tap a listing from the search overlay: filter to just that and navigate.
+  const handlePickSpotFromSearch = (spot) => {
+    setShowSearch(false);
+    onSpotTap(spot);
+  };
 
   return (
     <div style={{ position: 'relative', width: '100%', height: 'calc(100dvh - 78px)', backgroundColor: C.white }}>
@@ -1075,23 +1195,44 @@ function FindView({ listings, onSpotTap }) {
         padding: '16px 16px 12px',
         backgroundColor: C.mapBg,
       }}>
-        <div style={{
-          backgroundColor: C.white, borderRadius: 100, padding: '14px 20px',
-          display: 'flex', alignItems: 'center', gap: 12,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)',
-        }}>
+        <div
+          onClick={() => setShowSearch(true)}
+          style={{
+            backgroundColor: C.white, borderRadius: 100, padding: '14px 20px',
+            display: 'flex', alignItems: 'center', gap: 12,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)',
+            cursor: 'pointer',
+          }}
+        >
           <Search size={18} color={C.ink} strokeWidth={2.5} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 14, fontWeight: 600, color: C.ink, lineHeight: 1.2 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontFamily: '"Inter", sans-serif', fontSize: 14, fontWeight: 600, color: C.ink, lineHeight: 1.2,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
               {searchHeadline}
             </div>
             <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, color: C.inkMute, lineHeight: 1.2, marginTop: 1 }}>
-              {allSpots.length} spots · Any time · Any price
+              {allSpots.length} {allSpots.length === 1 ? 'spot' : 'spots'} · Any time · Any price
             </div>
           </div>
-          <div style={{ width: 36, height: 36, borderRadius: '50%', backgroundColor: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <SlidersHorizontal size={16} color={C.ink} strokeWidth={2.2} />
-          </div>
+          {hasActiveSearch ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); clearSearch(); }}
+              style={{
+                width: 36, height: 36, borderRadius: '50%', backgroundColor: C.bg,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: 'none', cursor: 'pointer', padding: 0,
+              }}
+              aria-label="Clear search"
+            >
+              <X size={16} color={C.ink} strokeWidth={2.2} />
+            </button>
+          ) : (
+            <div style={{ width: 36, height: 36, borderRadius: '50%', backgroundColor: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <SlidersHorizontal size={16} color={C.ink} strokeWidth={2.2} />
+            </div>
+          )}
         </div>
 
         {showChips && (
@@ -1131,7 +1272,14 @@ function FindView({ listings, onSpotTap }) {
 
       <div style={{ width: '100%', height: 'calc(100dvh - 78px)', paddingTop: topOverlayHeight, boxSizing: 'border-box' }}>
         <MapErrorBoundary childProps={{ spots: [], userListings: filteredListings, onSpotTap }}>
-          <VanMap spots={[]} userListings={filteredListings} onSpotTap={onSpotTap} onClusterTap={handleClusterTap} cityFilter={selectedCity} />
+          <VanMap
+            spots={[]}
+            userListings={filteredListings}
+            onSpotTap={onSpotTap}
+            onClusterTap={handleClusterTap}
+            cityFilter={selectedCity}
+            searchLocation={searchLocation}
+          />
         </MapErrorBoundary>
       </div>
 
@@ -1140,7 +1288,7 @@ function FindView({ listings, onSpotTap }) {
       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 12, zIndex: 500, paddingTop: 12 }}>
         <div style={{ padding: '0 16px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, fontWeight: 700, color: C.ink }}>
-            {allSpots.length} spots near you
+            {allSpots.length} {allSpots.length === 1 ? 'spot' : 'spots'} near you
           </div>
           <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 12, fontWeight: 600, color: C.amber, cursor: 'pointer' }}>
             See all →
@@ -1156,7 +1304,311 @@ function FindView({ listings, onSpotTap }) {
           ))}
         </div>
       </div>
+
+      {showSearch && (
+        <SearchOverlay
+          listings={listings}
+          initialQuery={textQuery}
+          onClose={() => setShowSearch(false)}
+          onQueryChange={setTextQuery}
+          onPickSpot={handlePickSpotFromSearch}
+          onSearchAddress={handleAddressSearch}
+        />
+      )}
     </div>
+  );
+}
+
+// ============================================================================
+// SEARCH OVERLAY
+// ============================================================================
+function SearchOverlay({ listings, initialQuery, onClose, onQueryChange, onPickSpot, onSearchAddress }) {
+  const [q, setQ] = useState(initialQuery || '');
+  const [addressBusy, setAddressBusy] = useState(false);
+  const [addressError, setAddressError] = useState('');
+  const inputRef = useRef(null);
+
+  // Autofocus on mount.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (inputRef.current) inputRef.current.focus();
+    }, 60);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Propagate query up so the parent's filter state stays in sync while typing.
+  useEffect(() => {
+    onQueryChange(q);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
+
+  const trimmed = q.trim();
+
+  const matches = React.useMemo(() => {
+    if (!trimmed) return [];
+    return listings.filter((l) => listingMatchesQuery(l, trimmed)).slice(0, 20);
+  }, [listings, trimmed]);
+
+  const runAddressSearch = async () => {
+    if (!trimmed || addressBusy) return;
+    setAddressBusy(true);
+    setAddressError('');
+    const result = await onSearchAddress(trimmed);
+    setAddressBusy(false);
+    if (!result || !result.ok) {
+      if (result && result.reason === 'notfound') {
+        setAddressError(`No results for "${trimmed}". Try a fuller address.`);
+      } else {
+        setAddressError('Search failed. Check your connection and try again.');
+      }
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 2000, backgroundColor: C.white,
+      display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Top bar */}
+      <div style={{
+        padding: '12px 12px 12px 8px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        borderBottom: `1px solid ${C.line}`,
+        backgroundColor: C.white,
+      }}>
+        <button
+          onClick={onClose}
+          style={{
+            width: 40, height: 40, borderRadius: '50%', border: 'none',
+            background: 'transparent', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
+          }}
+          aria-label="Close search"
+        >
+          <ChevronLeft size={22} color={C.ink} strokeWidth={2.4} />
+        </button>
+        <div style={{ flex: 1, position: 'relative' }}>
+          <Search
+            size={16}
+            color={C.inkMute}
+            strokeWidth={2.2}
+            style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+          />
+          <input
+            ref={inputRef}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') runAddressSearch(); }}
+            placeholder="Search title, address, or neighborhood"
+            style={{
+              width: '100%',
+              padding: '11px 38px 11px 38px',
+              borderRadius: 100,
+              border: `1px solid ${C.line}`,
+              fontFamily: '"Inter", sans-serif',
+              fontSize: 14,
+              fontWeight: 500,
+              color: C.ink,
+              outline: 'none',
+              backgroundColor: C.bg,
+              boxSizing: 'border-box',
+            }}
+          />
+          {q && (
+            <button
+              onClick={() => setQ('')}
+              style={{
+                position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                width: 26, height: 26, borderRadius: '50%', border: 'none',
+                backgroundColor: C.line, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', cursor: 'pointer', padding: 0,
+              }}
+              aria-label="Clear input"
+            >
+              <X size={13} color={C.ink} strokeWidth={2.4} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Results */}
+      <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        {!trimmed && (
+          <div style={{
+            padding: '48px 28px',
+            textAlign: 'center',
+            color: C.inkMute,
+            fontFamily: '"Inter", sans-serif',
+            fontSize: 13,
+            lineHeight: 1.6,
+          }}>
+            Type to filter spots by title, address, or neighborhood.<br />
+            Or search any address to jump the map there.
+          </div>
+        )}
+
+        {trimmed && matches.length > 0 && (
+          <div>
+            <div style={{
+              padding: '14px 20px 6px',
+              fontFamily: '"Inter", sans-serif',
+              fontSize: 11,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: C.inkMute,
+              fontWeight: 700,
+            }}>
+              Spots · {matches.length}
+            </div>
+            {matches.map((spot) => (
+              <SearchResultRow key={spot.id} spot={spot} onTap={() => onPickSpot(spot)} />
+            ))}
+          </div>
+        )}
+
+        {trimmed && matches.length === 0 && (
+          <div style={{
+            padding: '14px 20px',
+            fontFamily: '"Inter", sans-serif',
+            fontSize: 13,
+            color: C.inkMute,
+          }}>
+            No spots match "{trimmed}".
+          </div>
+        )}
+
+        {trimmed && (
+          <div>
+            <div style={{
+              padding: '14px 20px 6px',
+              fontFamily: '"Inter", sans-serif',
+              fontSize: 11,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: C.inkMute,
+              fontWeight: 700,
+            }}>
+              Search on map
+            </div>
+            <button
+              onClick={runAddressSearch}
+              disabled={addressBusy}
+              style={{
+                width: '100%',
+                padding: '12px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 14,
+                background: 'none',
+                border: 'none',
+                cursor: addressBusy ? 'default' : 'pointer',
+                textAlign: 'left',
+                opacity: addressBusy ? 0.6 : 1,
+              }}
+            >
+              <div style={{
+                width: 42, height: 42, borderRadius: '50%',
+                backgroundColor: C.greenSoft,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>
+                <MapPin size={18} color={C.green} strokeWidth={2.3} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontFamily: '"Inter", sans-serif',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: C.ink,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {addressBusy ? 'Searching…' : `Find "${trimmed}" on map`}
+                </div>
+                <div style={{
+                  fontFamily: '"Inter", sans-serif',
+                  fontSize: 11,
+                  color: C.inkMute,
+                  marginTop: 2,
+                }}>
+                  Center the map on this address
+                </div>
+              </div>
+              <ArrowRight size={16} color={C.ink} strokeWidth={2.2} />
+            </button>
+            {addressError && (
+              <div style={{
+                padding: '4px 20px 14px',
+                fontFamily: '"Inter", sans-serif',
+                fontSize: 12,
+                color: '#B91C1C',
+              }}>
+                {addressError}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// SEARCH RESULT ROW
+// ============================================================================
+function SearchResultRow({ spot, onTap }) {
+  return (
+    <button
+      onClick={onTap}
+      style={{
+        width: '100%',
+        padding: '10px 20px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        textAlign: 'left',
+      }}
+    >
+      <div style={{
+        width: 52, height: 52, borderRadius: 10, overflow: 'hidden', flexShrink: 0,
+        backgroundColor: C.mapBg,
+      }}>
+        <SpotPhoto type={spot.type} variant="a" />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontFamily: '"Inter", sans-serif',
+          fontSize: 14,
+          fontWeight: 600,
+          color: C.ink,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {spot.title || 'Untitled'}
+        </div>
+        <div style={{
+          fontFamily: '"Inter", sans-serif',
+          fontSize: 12,
+          color: C.inkMute,
+          marginTop: 2,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {spot.neighborhood || spot.address || spot.type || '—'}
+        </div>
+      </div>
+      <div style={{
+        fontFamily: '"Inter", sans-serif',
+        fontSize: 14,
+        fontWeight: 700,
+        color: C.amber,
+        flexShrink: 0,
+      }}>
+        ${spot.rate}
+        <span style={{ fontSize: 10, color: C.inkMute, fontWeight: 500, marginLeft: 1 }}>/hr</span>
+      </div>
+    </button>
   );
 }
 
@@ -2739,7 +3191,7 @@ function BottomNav({ tab, setTab }) {
 export default function Turnout() {
   useFonts();
   useEffect(() => {
-    const BG = '#CEE7F0';
+    const BG = '#9ED7E6';
     const prevBody = document.body.style.backgroundColor;
     const prevHtml = document.documentElement.style.backgroundColor;
     document.body.style.backgroundColor = BG;
