@@ -2674,14 +2674,16 @@ function HostView({ listings, userId, onAdd, onSpotTap, onEdit, onDelete, onLogo
           <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 700, color: C.inkMute, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>
             Your listings
           </div>
-          {myListings.map((spot) => (
+          {myListings.map((spot) => {
+            const coverSrc = Array.isArray(spot.photos) && spot.photos.length > 0 ? spot.photos[0] : null;
+            return (
             <div key={spot.id} style={{
               backgroundColor: C.white, borderRadius: 16, marginBottom: 12,
               overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)',
             }}>
               <div onClick={() => onSpotTap(spot)} style={{ cursor: 'pointer' }}>
                 <div style={{ height: 140, overflow: 'hidden' }}>
-                  <SpotPhoto type={spot.type} variant="a" />
+                  <SpotPhoto type={spot.type} variant="a" src={coverSrc} />
                 </div>
                 <div style={{ padding: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
@@ -2715,7 +2717,8 @@ function HostView({ listings, userId, onAdd, onSpotTap, onEdit, onDelete, onLogo
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
