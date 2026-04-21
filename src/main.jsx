@@ -4,6 +4,7 @@ import App from './App.jsx'
 import { supabase } from './supabase.js'
 
 const LISTINGS_KEY = 'turnout:listings'
+const PHOTOS_BUCKET = 'listing-photos'
 
 // Wrap any promise with a timeout so hanging Supabase calls don't freeze the UI.
 function withTimeout(promise, ms, label) {
@@ -51,6 +52,57 @@ async function fetchEmailsForUsers(userIds) {
     console.error('[turnout] fetchEmailsForUsers error:', err)
     return {}
   }
+}
+
+// Compress an image client-side before upload. Resizes so the longest side is
+// at most `maxSize` pixels and re-encodes as JPEG at `quality`. Keeps uploads
+// fast on cellular and storage costs low. Returns a Blob.
+async function compressImage(file, { maxSize = 1600, quality = 0.82 } = {}) {
+  if (!file) throw new Error('No file provided')
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      try {
+        const { width, height } = img
+        const scale = Math.min(1, maxSize / Math.max(width, height))
+        const w = Math.max(1, Math.round(width * scale))
+        const h = Math.max(1, Math.round(height * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, w, h)
+        canvas.toBlob(
+          (blob) => {
+            URL.revokeObjectURL(url)
+            if (!blob) return reject(new Error('Image encoding failed'))
+            resolve(blob)
+          },
+          'image/jpeg',
+          quality
+        )
+      } catch (err) {
+        URL.revokeObjectURL(url)
+        reject(err)
+      }
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error("Couldn't read that image. HEIC photos from iPhone may need to be exported as JPEG first."))
+    }
+    img.src = url
+  })
+}
+
+// Extract the storage object path (user_id/filename) from a public URL.
+// Returns null if the URL doesn't match the listing-photos bucket.
+function pathFromPhotoUrl(url) {
+  if (!url || typeof url !== 'string') return null
+  const marker = `/storage/v1/object/public/${PHOTOS_BUCKET}/`
+  const idx = url.indexOf(marker)
+  if (idx === -1) return null
+  return url.slice(idx + marker.length)
 }
 
 if (typeof window !== 'undefined' && !window.storage) {
@@ -135,7 +187,7 @@ if (typeof window !== 'undefined' && !window.storage) {
 
     updateListing: async (id, patch) => {
       if (!id) return null
-      const allowed = ['title', 'address', 'rate', 'type', 'available', 'description', 'lat', 'lng']
+      const allowed = ['title', 'address', 'rate', 'type', 'available', 'description', 'lat', 'lng', 'photos']
       const clean = Object.fromEntries(
         Object.entries(patch || {}).filter(([k]) => allowed.includes(k))
       )
@@ -161,6 +213,63 @@ if (typeof window !== 'undefined' && !window.storage) {
       )
       if (error) {
         console.error('[turnout] delete listing failed:', error.message)
+        return false
+      }
+      return true
+    },
+
+    // ========================================================================
+    // PHOTO UPLOAD / DELETE
+    // ========================================================================
+    // Compresses `file` client-side, uploads to the `listing-photos` bucket
+    // under {user_id}/<timestamp>-<random>.jpg, and returns the public URL.
+    // Returns null on failure (caller shows the error in UI).
+    uploadListingPhoto: async (file) => {
+      if (!file) return null
+      const user = await getCurrentUser()
+      if (!user) {
+        console.error('[turnout] cannot upload photo: not signed in')
+        throw new Error('You need to sign in before uploading photos.')
+      }
+      let blob
+      try {
+        blob = await compressImage(file, { maxSize: 1600, quality: 0.82 })
+      } catch (err) {
+        console.warn('[turnout] image compression failed:', err)
+        throw err
+      }
+      const rand = Math.random().toString(36).slice(2, 10)
+      const filename = `${Date.now()}-${rand}.jpg`
+      const path = `${user.id}/${filename}`
+      const { error: upErr } = await withTimeout(
+        supabase.storage.from(PHOTOS_BUCKET).upload(path, blob, {
+          contentType: 'image/jpeg',
+          cacheControl: '3600',
+          upsert: false,
+        }),
+        20000,
+        'storage.upload'
+      )
+      if (upErr) {
+        console.error('[turnout] photo upload failed:', upErr.message || upErr)
+        throw new Error(upErr.message || 'Upload failed')
+      }
+      const { data } = supabase.storage.from(PHOTOS_BUCKET).getPublicUrl(path)
+      return data?.publicUrl || null
+    },
+
+    // Best-effort delete of a photo from storage given its public URL.
+    // Doesn't throw — if the file is already gone, that's fine.
+    deleteListingPhoto: async (url) => {
+      const path = pathFromPhotoUrl(url)
+      if (!path) return false
+      const { error } = await withTimeout(
+        supabase.storage.from(PHOTOS_BUCKET).remove([path]),
+        8000,
+        'storage.delete'
+      )
+      if (error) {
+        console.warn('[turnout] photo delete failed:', error.message || error)
         return false
       }
       return true

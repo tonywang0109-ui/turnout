@@ -220,7 +220,32 @@ function LogoMark({ size = 32 }) {
 // ============================================================================
 // PHOTO PLACEHOLDER
 // ============================================================================
-function SpotPhoto({ type, variant = 'a', withCameraBadge = false }) {
+function SpotPhoto({ type, variant = 'a', withCameraBadge = false, src = null }) {
+  // If we have a real photo URL, render that instead of the generated placeholder.
+  if (src) {
+    return (
+      <div style={{
+        width: '100%',
+        height: '100%',
+        position: 'relative',
+        backgroundColor: C.line,
+        overflow: 'hidden',
+      }}>
+        <img
+          src={src}
+          alt=""
+          draggable={false}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block',
+          }}
+        />
+      </div>
+    );
+  }
+
   const palette = TYPE_COLORS[type] || TYPE_COLORS['Underground'];
 
   return (
@@ -1571,6 +1596,7 @@ function SearchOverlay({ listings, initialQuery, onClose, onQueryChange, onPickS
 // SEARCH RESULT ROW
 // ============================================================================
 function SearchResultRow({ spot, onTap }) {
+  const coverSrc = Array.isArray(spot.photos) && spot.photos.length > 0 ? spot.photos[0] : null;
   return (
     <button
       onClick={onTap}
@@ -1590,7 +1616,7 @@ function SearchResultRow({ spot, onTap }) {
         width: 52, height: 52, borderRadius: 10, overflow: 'hidden', flexShrink: 0,
         backgroundColor: C.mapBg,
       }}>
-        <SpotPhoto type={spot.type} variant="a" />
+        <SpotPhoto type={spot.type} variant="a" src={coverSrc} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
@@ -1630,13 +1656,14 @@ function SearchResultRow({ spot, onTap }) {
 // MINI CARD
 // ============================================================================
 function MiniSpotCard({ spot, onTap }) {
+  const coverSrc = Array.isArray(spot.photos) && spot.photos.length > 0 ? spot.photos[0] : null;
   return (
     <div onClick={() => onTap(spot)} style={{
       flex: '0 0 260px', backgroundColor: C.white, borderRadius: 16, overflow: 'hidden',
       boxShadow: '0 2px 12px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)', cursor: 'pointer',
     }}>
       <div style={{ position: 'relative', height: 130, overflow: 'hidden' }}>
-        <SpotPhoto type={spot.type} variant="a" />
+        <SpotPhoto type={spot.type} variant="a" src={coverSrc} />
         <div style={{
           position: 'absolute', top: 10, right: 10, width: 30, height: 30, borderRadius: '50%',
           backgroundColor: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1680,25 +1707,38 @@ function SpotDetail({ spot, onBack, onReserve }) {
   const [hours, setHours] = useState(2);
   const [galleryIdx, setGalleryIdx] = useState(0);
   const total = (spot.rate * hours).toFixed(2);
-  const variants = ['a', 'b', 'c'];
+
+  // Use real photos if present; otherwise fall back to the three-variant placeholder.
+  const realPhotos = Array.isArray(spot.photos) ? spot.photos.filter(Boolean) : [];
+  const hasRealPhotos = realPhotos.length > 0;
+  const gallery = hasRealPhotos
+    ? realPhotos.map((src) => ({ src }))
+    : ['a', 'b', 'c'].map((variant) => ({ variant }));
+  const safeIdx = Math.min(galleryIdx, gallery.length - 1);
+  const active = gallery[safeIdx] || gallery[0];
 
   return (
     <div style={{ minHeight: '100%', backgroundColor: C.white, display: 'flex', flexDirection: 'column' }}>
       <div style={{ position: 'relative' }}>
         <div style={{ height: 320, position: 'relative', overflow: 'hidden' }}>
-          <SpotPhoto type={spot.type} variant={variants[galleryIdx]} withCameraBadge />
+          <SpotPhoto
+            type={spot.type}
+            variant={active.variant || 'a'}
+            src={active.src || null}
+            withCameraBadge={!hasRealPhotos}
+          />
         </div>
         <div style={{
           position: 'absolute', bottom: 16, left: 0, right: 0,
           display: 'flex', justifyContent: 'center', gap: 6,
         }}>
-          {variants.map((v, i) => (
+          {gallery.map((_, i) => (
             <div
-              key={v}
+              key={i}
               onClick={() => setGalleryIdx(i)}
               style={{
-                width: i === galleryIdx ? 24 : 6, height: 6, borderRadius: 3,
-                backgroundColor: i === galleryIdx ? C.white : 'rgba(255,255,255,0.6)',
+                width: i === safeIdx ? 24 : 6, height: 6, borderRadius: 3,
+                backgroundColor: i === safeIdx ? C.white : 'rgba(255,255,255,0.6)',
                 cursor: 'pointer', transition: 'width 0.2s',
               }}
             />
@@ -1711,7 +1751,7 @@ function SpotDetail({ spot, onBack, onReserve }) {
           fontFamily: '"Inter", sans-serif', fontSize: 11, fontWeight: 600,
           backdropFilter: 'blur(10px)',
         }}>
-          {galleryIdx + 1} / {variants.length}
+          {safeIdx + 1} / {gallery.length}
         </div>
         <button onClick={onBack} style={{
           position: 'absolute', top: 16, left: 16, width: 40, height: 40, borderRadius: '50%',
@@ -1740,17 +1780,17 @@ function SpotDetail({ spot, onBack, onReserve }) {
       </div>
 
       <div style={{ padding: '12px 16px 0', display: 'flex', gap: 8 }}>
-        {variants.map((v, i) => (
+        {gallery.map((item, i) => (
           <div
-            key={v}
+            key={i}
             onClick={() => setGalleryIdx(i)}
             style={{
               flex: 1, height: 60, borderRadius: 8, overflow: 'hidden',
-              border: i === galleryIdx ? `2px solid ${C.ink}` : `2px solid transparent`,
+              border: i === safeIdx ? `2px solid ${C.ink}` : `2px solid transparent`,
               cursor: 'pointer',
             }}
           >
-            <SpotPhoto type={spot.type} variant={v} />
+            <SpotPhoto type={spot.type} variant={item.variant || 'a'} src={item.src || null} />
           </div>
         ))}
       </div>
@@ -2760,7 +2800,208 @@ function HostView({ listings, userId, onAdd, onSpotTap, onEdit, onDelete, onLogo
 // ============================================================================
 // ADD SPOT FORM
 // ============================================================================
-function AddSpotForm({ onCancel, onSave, initial = null }) {
+// ============================================================================
+// PHOTO UPLOADER
+// ============================================================================
+function PhotoUploader({ photos, onAdd, onDelete, userId, maxCount = 3 }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const fileInputRef = useRef(null);
+
+  const handlePickFile = () => {
+    if (uploading || photos.length >= maxCount) return;
+    setError('');
+    if (fileInputRef.current) fileInputRef.current.click();
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    // Reset value so picking the same file twice still fires onChange.
+    e.target.value = '';
+    if (!file) return;
+    if (!userId) {
+      setError('Please sign in to upload photos.');
+      return;
+    }
+    if (typeof window === 'undefined' || !window.storage || !window.storage.uploadListingPhoto) {
+      setError('Upload isn\'t ready yet. Make sure main.jsx is up to date.');
+      return;
+    }
+    setUploading(true);
+    setError('');
+    try {
+      const url = await window.storage.uploadListingPhoto(file);
+      if (!url) throw new Error('Upload failed — check your connection and try again.');
+      onAdd(url);
+    } catch (err) {
+      console.warn('Photo upload failed:', err);
+      setError((err && err.message) || 'Photo upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Build a fixed-length list of slots so the grid always shows `maxCount` cells.
+  const slots = [];
+  for (let i = 0; i < photos.length; i++) {
+    slots.push({ kind: 'photo', src: photos[i], index: i });
+  }
+  if (photos.length < maxCount) {
+    slots.push({ kind: 'add' });
+    for (let i = photos.length + 1; i < maxCount; i++) {
+      slots.push({ kind: 'ghost' });
+    }
+  }
+
+  return (
+    <div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        style={{ display: 'none' }}
+      />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        {slots.map((slot, i) => {
+          if (slot.kind === 'photo') {
+            const isCover = slot.index === 0;
+            return (
+              <div
+                key={`p-${slot.index}-${slot.src}`}
+                style={{
+                  position: 'relative',
+                  aspectRatio: '1 / 1',
+                  borderRadius: 10,
+                  overflow: 'hidden',
+                  backgroundColor: C.line,
+                }}
+              >
+                <img
+                  src={slot.src}
+                  alt=""
+                  draggable={false}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+                {isCover && (
+                  <div style={{
+                    position: 'absolute', top: 6, left: 6,
+                    padding: '3px 8px', borderRadius: 100,
+                    backgroundColor: C.ink, color: C.white,
+                    fontFamily: '"Inter", sans-serif', fontSize: 9, fontWeight: 700,
+                    letterSpacing: '0.1em',
+                  }}>
+                    COVER
+                  </div>
+                )}
+                <button
+                  onClick={() => onDelete(slot.index)}
+                  style={{
+                    position: 'absolute', top: 6, right: 6,
+                    width: 26, height: 26, borderRadius: '50%',
+                    backgroundColor: 'rgba(0,0,0,0.65)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: 'none', cursor: 'pointer', padding: 0,
+                  }}
+                  aria-label="Delete photo"
+                >
+                  <X size={14} color={C.white} strokeWidth={2.6} />
+                </button>
+              </div>
+            );
+          }
+          if (slot.kind === 'add') {
+            return (
+              <button
+                key={`add-${i}`}
+                onClick={handlePickFile}
+                disabled={uploading}
+                style={{
+                  aspectRatio: '1 / 1',
+                  borderRadius: 10,
+                  border: `1.5px dashed ${uploading ? C.line : C.inkMute}`,
+                  backgroundColor: C.bg,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  cursor: uploading ? 'wait' : 'pointer',
+                  padding: 8,
+                  fontFamily: '"Inter", sans-serif',
+                }}
+              >
+                {uploading ? (
+                  <>
+                    <span style={{
+                      width: 18, height: 18, borderRadius: '50%',
+                      border: `2px solid ${C.line}`,
+                      borderTopColor: C.ink,
+                      animation: 'turnoutSpin 0.8s linear infinite',
+                      display: 'inline-block',
+                    }} />
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, color: C.inkMute,
+                      letterSpacing: '0.08em',
+                    }}>
+                      UPLOADING
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Plus size={22} color={C.ink} strokeWidth={2.2} />
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, color: C.inkSoft,
+                      letterSpacing: '0.08em',
+                    }}>
+                      ADD PHOTO
+                    </span>
+                  </>
+                )}
+              </button>
+            );
+          }
+          return (
+            <div
+              key={`ghost-${i}`}
+              style={{
+                aspectRatio: '1 / 1',
+                borderRadius: 10,
+                border: `1.5px dashed ${C.lineLight}`,
+                backgroundColor: C.bg,
+                opacity: 0.6,
+              }}
+            />
+          );
+        })}
+      </div>
+      {error && (
+        <div style={{
+          marginTop: 8,
+          fontFamily: '"Inter", sans-serif',
+          fontSize: 12,
+          color: '#B91C1C',
+        }}>
+          {error}
+        </div>
+      )}
+      <div style={{
+        marginTop: 8,
+        fontFamily: '"Inter", sans-serif',
+        fontSize: 11,
+        color: C.inkMute,
+        lineHeight: 1.5,
+      }}>
+        Up to {maxCount} photos. First one is your cover. Resized before upload.
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// ADD SPOT FORM
+// ============================================================================
+function AddSpotForm({ onCancel, onSave, initial = null, userId = null }) {
   const isEdit = initial !== null;
   const [title, setTitle] = useState(initial?.title || '');
   const [address, setAddress] = useState(initial?.address || '');
@@ -2768,9 +3009,30 @@ function AddSpotForm({ onCancel, onSave, initial = null }) {
   const [type, setType] = useState(initial?.type || 'Underground');
   const [available, setAvailable] = useState(initial?.available || 'Mon–Fri, 8am–6pm');
   const [description, setDescription] = useState(initial?.description || '');
+  const [photos, setPhotos] = useState(
+    Array.isArray(initial?.photos) ? initial.photos.filter(Boolean) : []
+  );
   const [saving, setSaving] = useState(false);
 
   const canSave = title && address && rate && !saving;
+
+  const handleAddPhoto = (url) => {
+    if (!url) return;
+    setPhotos((prev) => (prev.length >= 3 ? prev : [...prev, url]));
+  };
+
+  const handleDeletePhoto = (idx) => {
+    setPhotos((prev) => {
+      const removed = prev[idx];
+      const next = prev.filter((_, i) => i !== idx);
+      // Fire-and-forget storage cleanup. If it fails the file is orphaned
+      // in storage but the listing is correct.
+      if (removed && typeof window !== 'undefined' && window.storage?.deleteListingPhoto) {
+        try { window.storage.deleteListingPhoto(removed); } catch (_) { /* noop */ }
+      }
+      return next;
+    });
+  };
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -2788,6 +3050,7 @@ function AddSpotForm({ onCancel, onSave, initial = null }) {
         type,
         available,
         description,
+        photos,
         lat: coords?.lat ?? initial.lat ?? null,
         lng: coords?.lng ?? initial.lng ?? null,
       });
@@ -2803,6 +3066,7 @@ function AddSpotForm({ onCancel, onSave, initial = null }) {
       perks: ['New', 'Flexible'],
       amenities: ['flexible', 'covered'],
       available,
+      photos,
       lat: coords?.lat ?? null,
       lng: coords?.lng ?? null,
       x: 245 + Math.random() * 40 - 20,
@@ -2867,6 +3131,16 @@ function AddSpotForm({ onCancel, onSave, initial = null }) {
         <div style={{ marginBottom: 20 }}>
           <label style={labelStyle}>Description (optional)</label>
           <textarea style={{ ...inputStyle, minHeight: 90, resize: 'vertical' }} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Access instructions, size limits, anything drivers should know." />
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <label style={labelStyle}>Photos</label>
+          <PhotoUploader
+            photos={photos}
+            onAdd={handleAddPhoto}
+            onDelete={handleDeletePhoto}
+            userId={userId}
+            maxCount={3}
+          />
         </div>
       </div>
       <div style={{ padding: '14px 20px', borderTop: `1px solid ${C.line}` }}>
@@ -3370,10 +3644,10 @@ export default function Turnout() {
     return <div style={containerStyle}><BookingRequestSent booking={lastBooking} onDone={handleRequestSentDone} /></div>;
   }
   if (view === 'addSpot') {
-    return <div style={containerStyle}><AddSpotForm onCancel={() => setView('main')} onSave={handleAddSpot} /></div>;
+    return <div style={containerStyle}><AddSpotForm userId={session?.user?.id || null} onCancel={() => setView('main')} onSave={handleAddSpot} /></div>;
   }
   if (view === 'editSpot' && editingSpot) {
-    return <div style={containerStyle}><AddSpotForm initial={editingSpot} onCancel={() => { setEditingSpot(null); setView('main'); setTab('host'); }} onSave={handleSaveEdit} /></div>;
+    return <div style={containerStyle}><AddSpotForm userId={session?.user?.id || null} initial={editingSpot} onCancel={() => { setEditingSpot(null); setView('main'); setTab('host'); }} onSave={handleSaveEdit} /></div>;
   }
   if (view === 'auth') {
     return <div style={containerStyle}><AuthView onCancel={() => { setView('main'); setTab('find'); }} onSuccess={() => { setView('main'); setTab('host'); }} /></div>;
