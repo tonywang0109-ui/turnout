@@ -175,29 +175,37 @@ These Terms are the entire agreement between you and Turnout regarding the Servi
 
 Questions about these Terms: the contact address currently posted on turnoutparking.com.`;
 
-function hasAcceptedTerms() {
-  if (typeof window === 'undefined' || !window.localStorage) return false;
+// Terms acceptance is recorded to Supabase user_metadata at signup time.
+// For Google OAuth (which redirects away), we stash the pending acceptance
+// in sessionStorage so we can write it to the user's profile after they return.
+function setPendingTermsAcceptance() {
+  if (typeof window === 'undefined' || !window.sessionStorage) return;
   try {
-    const raw = window.localStorage.getItem(TERMS_STORAGE_KEY);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw);
-    return parsed && parsed.version === TERMS_VERSION;
+    window.sessionStorage.setItem(
+      TERMS_STORAGE_KEY,
+      JSON.stringify({ version: TERMS_VERSION, acceptedAt: new Date().toISOString() })
+    );
+  } catch (_) { /* noop */ }
+}
+
+function getPendingTermsAcceptance() {
+  if (typeof window === 'undefined' || !window.sessionStorage) return null;
+  try {
+    const raw = window.sessionStorage.getItem(TERMS_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
   } catch (_) {
-    return false;
+    return null;
   }
 }
 
-function recordTermsAcceptance() {
-  if (typeof window === 'undefined' || !window.localStorage) return;
-  try {
-    window.localStorage.setItem(
-      TERMS_STORAGE_KEY,
-      JSON.stringify({
-        version: TERMS_VERSION,
-        acceptedAt: new Date().toISOString(),
-      })
-    );
-  } catch (_) { /* noop */ }
+function clearPendingTermsAcceptance() {
+  if (typeof window === 'undefined' || !window.sessionStorage) return;
+  try { window.sessionStorage.removeItem(TERMS_STORAGE_KEY); } catch (_) { /* noop */ }
+}
+
+function buildTermsAcceptancePayload() {
+  return { terms_version: TERMS_VERSION, terms_accepted_at: new Date().toISOString() };
 }
 
 // Render a block of our lightweight markdown-ish terms text into React nodes.
@@ -259,24 +267,7 @@ function renderTermsContent(text) {
   return out;
 }
 
-function TermsAgreement({ onAccept }) {
-  const [scrolledToBottom, setScrolledToBottom] = useState(false);
-  const [agreed, setAgreed] = useState(false);
-
-  const handleScroll = (e) => {
-    const el = e.currentTarget;
-    const remaining = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (remaining < 48) setScrolledToBottom(true);
-  };
-
-  const canAccept = scrolledToBottom && agreed;
-
-  const handleAccept = () => {
-    if (!canAccept) return;
-    recordTermsAcceptance();
-    onAccept();
-  };
-
+function TermsReader({ onClose }) {
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 10000,
@@ -285,52 +276,45 @@ function TermsAgreement({ onAccept }) {
       fontFamily: '"Inter", sans-serif',
     }}>
       <div style={{
-        padding: '24px 24px 14px',
+        padding: '16px 16px 14px',
         borderBottom: `1px solid ${C.line}`,
         backgroundColor: C.white,
+        display: 'flex', alignItems: 'center', gap: 12,
       }}>
-        <div style={{
-          fontSize: 11, fontWeight: 700, color: C.amber,
-          letterSpacing: '0.15em', marginBottom: 10,
+        <button onClick={onClose} style={{
+          width: 40, height: 40, border: 'none', backgroundColor: 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+          flexShrink: 0,
         }}>
-          TERMS OF USE
-        </div>
-        <div style={{
-          fontSize: 22, fontWeight: 800, color: C.ink,
-          lineHeight: 1.15, letterSpacing: '-0.02em',
-        }}>
-          Read before using Turnout.
-        </div>
-        <div style={{
-          fontSize: 13, color: C.inkMute, marginTop: 8, lineHeight: 1.5,
-        }}>
-          Turnout is a free platform. We don't handle payments, verify users, or resolve disputes. Scroll to the bottom, tick the box, and tap Agree to continue. If you don't agree, close this tab.
+          <X size={24} color={C.ink} strokeWidth={2.2} />
+        </button>
+        <div style={{ flex: 1 }}>
+          <div style={{
+            fontSize: 10, fontWeight: 700, color: C.amber,
+            letterSpacing: '0.15em',
+          }}>
+            TERMS OF USE
+          </div>
+          <div style={{
+            fontSize: 17, fontWeight: 800, color: C.ink,
+            lineHeight: 1.2, letterSpacing: '-0.01em', marginTop: 2,
+          }}>
+            Terms of Use
+          </div>
         </div>
       </div>
 
-      <div
-        onScroll={handleScroll}
-        style={{
-          flex: 1,
-          overflow: 'auto',
-          WebkitOverflowScrolling: 'touch',
-          padding: '12px 24px 24px',
-          backgroundColor: C.white,
-        }}
-      >
+      <div style={{
+        flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch',
+        padding: '16px 24px 24px', backgroundColor: C.white,
+      }}>
         <div style={{
-          fontSize: 12, color: C.inkMute, marginTop: 6, marginBottom: 10,
+          fontSize: 12, color: C.inkMute, marginBottom: 14,
         }}>
           Version {TERMS_VERSION} · Last updated April 21, 2026
         </div>
         {renderTermsContent(TERMS_TEXT)}
-        <div style={{
-          marginTop: 18, padding: '14px 16px', backgroundColor: C.bg,
-          borderRadius: 12, border: `1px solid ${C.line}`,
-          fontSize: 12.5, lineHeight: 1.5, color: C.ink, fontWeight: 500,
-        }}>
-          By clicking "I agree," you confirm that you are at least 18 years old, that you have read and understood these Terms, and that you agree to be legally bound by them.
-        </div>
+        <div style={{ height: 24 }} />
       </div>
 
       <div style={{
@@ -338,44 +322,17 @@ function TermsAgreement({ onAccept }) {
         borderTop: `1px solid ${C.line}`,
         backgroundColor: C.white,
       }}>
-        <label
-          style={{
-            display: 'flex', alignItems: 'flex-start', gap: 12,
-            marginBottom: 12,
-            cursor: scrolledToBottom ? 'pointer' : 'not-allowed',
-            opacity: scrolledToBottom ? 1 : 0.55,
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={agreed}
-            disabled={!scrolledToBottom}
-            onChange={(e) => setAgreed(e.target.checked)}
-            style={{
-              marginTop: 2, width: 20, height: 20, flexShrink: 0,
-              accentColor: C.ink, cursor: 'inherit',
-            }}
-          />
-          <span style={{
-            fontSize: 13, color: C.ink, lineHeight: 1.5, fontWeight: 500,
-          }}>
-            I'm at least 18, I've read the Terms above, and I agree to be bound by them.
-          </span>
-        </label>
         <button
-          onClick={handleAccept}
-          disabled={!canAccept}
+          onClick={onClose}
           style={{
             width: '100%', padding: '16px',
             borderRadius: 14, border: 'none',
-            backgroundColor: canAccept ? C.ink : C.line,
-            color: canAccept ? C.white : C.inkMute,
+            backgroundColor: C.ink, color: C.white,
             fontSize: 15, fontWeight: 700,
-            cursor: canAccept ? 'pointer' : 'not-allowed',
-            letterSpacing: '-0.01em',
+            cursor: 'pointer', letterSpacing: '-0.01em',
           }}
         >
-          {scrolledToBottom ? 'I agree — continue to Turnout' : 'Scroll to the bottom to continue'}
+          Close
         </button>
       </div>
     </div>
@@ -1367,7 +1324,7 @@ function ClusterSheet({ group, onClose, onPick }) {
 // ============================================================================
 // WELCOME
 // ============================================================================
-function Welcome({ onContinue, onStory }) {
+function Welcome({ onContinue, onStory, onTerms }) {
   return (
     <div style={{
       height: '100dvh', minHeight: 600, position: 'relative', overflow: 'hidden',
@@ -1440,6 +1397,14 @@ function Welcome({ onContinue, onStory }) {
         }}>
           Read the founder's note →
         </div>
+        {onTerms && (
+          <div onClick={onTerms} style={{
+            fontFamily: '"Inter", sans-serif', fontSize: 12, color: C.white, opacity: 0.6,
+            textAlign: 'center', cursor: 'pointer', padding: '4px 0',
+          }}>
+            Terms of Use
+          </div>
+        )}
       </div>
     </div>
   );
@@ -3822,9 +3787,12 @@ function AuthView({ onCancel, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+  const [termsAgreed, setTermsAgreed] = useState(false);
+  const [showingTerms, setShowingTerms] = useState(false);
 
   const isSignup = mode === 'signup';
-  const canSubmit = email && password.length >= 6 && !loading;
+  const canSubmit = email && password.length >= 6 && !loading && (!isSignup || termsAgreed);
+  const canGoogle = !loading && (!isSignup || termsAgreed);
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -3833,9 +3801,15 @@ function AuthView({ onCancel, onSuccess }) {
     setInfo('');
     try {
       if (isSignup) {
-        const { data, error: e } = await supabase.auth.signUp({ email, password });
+        const { data, error: e } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: buildTermsAcceptancePayload() },
+        });
         if (e) { setError(e.message); return; }
         if (data?.session) {
+          // Belt-and-suspenders: also call updateUser to guarantee metadata is set
+          try { await supabase.auth.updateUser({ data: buildTermsAcceptancePayload() }); } catch (_) { /* noop */ }
           onSuccess();
         } else {
           setInfo("Check your email to confirm. Then come back and log in.");
@@ -3853,7 +3827,12 @@ function AuthView({ onCancel, onSuccess }) {
   };
 
   const handleGoogle = async () => {
+    if (!canGoogle) return;
     setError('');
+    if (isSignup) {
+      // Stash pending acceptance; we'll flush to user_metadata after the OAuth redirect returns
+      setPendingTermsAcceptance();
+    }
     setLoading(true);
     const { error: e } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -3903,11 +3882,12 @@ function AuthView({ onCancel, onSuccess }) {
             : 'Sign in to manage your listings.'}
         </div>
 
-        <button onClick={handleGoogle} disabled={loading} style={{
+        <button onClick={handleGoogle} disabled={!canGoogle} style={{
           width: '100%', backgroundColor: C.white, color: C.ink, border: `1px solid ${C.line}`,
           padding: '15px 20px', fontFamily: '"Inter", sans-serif', fontSize: 15, fontWeight: 600,
-          cursor: loading ? 'not-allowed' : 'pointer', borderRadius: 12, marginBottom: 20,
+          cursor: canGoogle ? 'pointer' : 'not-allowed', borderRadius: 12, marginBottom: 20,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+          opacity: canGoogle ? 1 : 0.5,
         }}>
           <span style={{
             width: 20, height: 20, borderRadius: '50%',
@@ -3952,6 +3932,40 @@ function AuthView({ onCancel, onSuccess }) {
           </div>
         )}
 
+        {isSignup && (
+          <label style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            marginTop: 18, cursor: 'pointer',
+          }}>
+            <input
+              type="checkbox"
+              checked={termsAgreed}
+              onChange={(e) => setTermsAgreed(e.target.checked)}
+              style={{
+                marginTop: 2, width: 18, height: 18, flexShrink: 0,
+                accentColor: C.ink, cursor: 'pointer',
+              }}
+            />
+            <span style={{
+              fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.ink,
+              lineHeight: 1.5, fontWeight: 500,
+            }}>
+              I'm at least 18 and I agree to Turnout's{' '}
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); setShowingTerms(true); }}
+                style={{
+                  border: 'none', background: 'transparent', padding: 0,
+                  fontFamily: '"Inter", sans-serif', fontSize: 13, fontWeight: 700,
+                  color: C.amber, cursor: 'pointer', textDecoration: 'underline',
+                }}
+              >
+                Terms of Use
+              </button>.
+            </span>
+          </label>
+        )}
+
         <button onClick={handleSubmit} disabled={!canSubmit} style={{
           width: '100%', backgroundColor: canSubmit ? C.ink : C.line, color: C.white, border: 'none',
           padding: '18px 24px', fontFamily: '"Inter", sans-serif', fontSize: 16, fontWeight: 700,
@@ -3964,7 +3978,7 @@ function AuthView({ onCancel, onSuccess }) {
           <span style={{ fontFamily: '"Inter", sans-serif', fontSize: 13, color: C.inkSoft }}>
             {isSignup ? 'Already have an account?' : "Don't have an account?"}
           </span>{' '}
-          <button onClick={() => { setMode(isSignup ? 'login' : 'signup'); setError(''); setInfo(''); }} style={{
+          <button onClick={() => { setMode(isSignup ? 'login' : 'signup'); setError(''); setInfo(''); setTermsAgreed(false); }} style={{
             border: 'none', background: 'transparent', cursor: 'pointer',
             fontFamily: '"Inter", sans-serif', fontSize: 13, fontWeight: 700, color: C.amber, padding: 0,
           }}>
@@ -3972,6 +3986,7 @@ function AuthView({ onCancel, onSuccess }) {
           </button>
         </div>
       </div>
+      {showingTerms && <TermsReader onClose={() => setShowingTerms(false)} />}
     </div>
   );
 }
@@ -4035,15 +4050,32 @@ export default function Turnout() {
   const [session, setSession] = useState(null);
   const [editingSpot, setEditingSpot] = useState(null);
   const [bookingsRefreshKey, setBookingsRefreshKey] = useState(0);
-  const [termsAccepted, setTermsAccepted] = useState(() => hasAcceptedTerms());
 
   useEffect(() => {
+    // Flush any pending Terms acceptance (e.g., from a Google OAuth signup) into user_metadata.
+    const flushPendingTerms = async (userSession) => {
+      if (!userSession?.user) return;
+      const pending = getPendingTermsAcceptance();
+      if (!pending) return;
+      const existingVersion = userSession.user.user_metadata?.terms_version;
+      if (existingVersion === TERMS_VERSION) {
+        clearPendingTermsAcceptance();
+        return;
+      }
+      try {
+        await supabase.auth.updateUser({ data: buildTermsAcceptancePayload() });
+        clearPendingTermsAcceptance();
+      } catch (_) { /* noop — will retry on next session load */ }
+    };
+
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
+      flushPendingTerms(data.session);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       if (event === 'SIGNED_IN') {
+        flushPendingTerms(newSession);
         setView((current) => {
           if (current === 'auth') {
             setTab('host');
@@ -4165,12 +4197,11 @@ export default function Turnout() {
     fontFamily: '"Inter", sans-serif', color: C.ink, display: 'flex', flexDirection: 'column',
   };
 
-  if (!termsAccepted) {
-    return <TermsAgreement onAccept={() => setTermsAccepted(true)} />;
-  }
-
   if (view === 'welcome') {
-    return <div style={containerStyle}><Welcome onContinue={handleWelcomeContinue} onStory={() => setView('story')} /></div>;
+    return <div style={containerStyle}><Welcome onContinue={handleWelcomeContinue} onStory={() => setView('story')} onTerms={() => setView('terms')} /></div>;
+  }
+  if (view === 'terms') {
+    return <TermsReader onClose={() => setView('welcome')} />;
   }
   if (view === 'story') {
     return <div style={containerStyle}><FounderNote onBack={() => setView('welcome')} /></div>;
