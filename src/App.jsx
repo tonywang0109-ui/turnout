@@ -34,6 +34,355 @@ const C = {
 };
 
 // ============================================================================
+// TERMS OF USE — click-through agreement (see /mnt/user-data/outputs/turnout-terms.md for the reference copy)
+// ============================================================================
+const TERMS_VERSION = 'v1-2026-04-21';
+const TERMS_STORAGE_KEY = 'turnout:terms_accepted';
+
+const TERMS_TEXT = `## 1. What Turnout is (and isn't)
+
+Turnout is a free online marketplace that lets people who have parking spaces ("**Hosts**") list them, and people who need parking ("**Renters**") discover and contact Hosts directly.
+
+**Turnout is not a party to any agreement between Hosts and Renters.** Turnout does not own, operate, inspect, or control any listed parking space. Turnout does not process payments. Turnout does not collect fees. Turnout does not verify the identity, qualifications, insurance, or legal right of any user. Turnout does not guarantee any listing.
+
+Any agreement to use, rent, or pay for a parking space is **solely between the Host and the Renter**. Turnout is a discovery and communication tool, nothing more.
+
+## 2. Eligibility
+
+You must be at least 18 years old and legally capable of entering into binding contracts to use Turnout. By using the Service, you represent and warrant that you meet these requirements.
+
+**Hosts** must have the legal right to list and rent out the parking space, whether by ownership, tenancy, strata/HOA permission, or other lawful authority. You are solely responsible for confirming that renting out your parking is permitted under your lease, strata bylaws, HOA rules, local zoning, tax laws, and any other applicable restrictions.
+
+**Renters** must have a valid driver's license and a lawfully registered, insured vehicle. You drive and park at your own risk.
+
+## 3. Your Account
+
+You are responsible for everything that happens under your account. Keep your login credentials secure. Provide accurate information. You may not create accounts for anyone else or impersonate any person.
+
+## 4. No Payments Through Turnout
+
+**Turnout does not process, hold, transmit, collect, refund, or guarantee any payment.** If you choose to arrange payment between yourself and another user — by Venmo, Cash App, Zelle, Interac e-Transfer, PayPal, cash, or any other method — that arrangement is **entirely between you and the other user**.
+
+Turnout cannot retrieve money on your behalf. Turnout cannot freeze, reverse, or investigate any payment. Turnout has no visibility into, and no responsibility for, the money flowing between users.
+
+If you share payment handles (e.g., a Venmo username) with another user, you do so **at your own risk**.
+
+## 5. No Fees
+
+Turnout is currently free to use. If this changes, you will be notified and asked to accept updated Terms before any fees apply.
+
+## 6. Host Responsibilities
+
+As a Host, **you are solely responsible** for:
+
+- Having the legal right to list and rent the space
+- The accuracy of the listing (location, size, access, hours, description, photos)
+- The condition and safety of the space
+- Any damage the space or its surroundings cause to a Renter's vehicle, person, or property
+- Complying with all applicable laws, including any tax obligations on money you receive
+- Complying with your lease, strata/HOA bylaws, local zoning, and permit requirements
+- Resolving any disputes, removals, or enforcement actions yourself — including calling a licensed tow company or local authorities if a vehicle overstays, is unauthorized, damaged, or refuses to leave
+- Maintaining any insurance you deem appropriate for your property
+
+**If a Renter overstays, damages your property, refuses to leave, does not pay, or otherwise fails to honor an agreement with you, it is your responsibility to resolve it.** Turnout will not tow vehicles, pursue payment, contact authorities, or take any enforcement action on your behalf.
+
+## 7. Renter Responsibilities
+
+As a Renter, **you are solely responsible** for:
+
+- Confirming the address, access instructions, and availability directly with the Host before using the space
+- Arriving and leaving strictly within the agreed time
+- Driving and parking safely and lawfully
+- Any damage you cause to the parking space, the Host's property, surrounding property, or other vehicles
+- Paying the Host as agreed
+- Complying with all applicable laws and any rules the Host has posted
+- Ensuring your vehicle is lawfully registered and insured, and that you hold a valid driver's license
+
+**If you overstay, damage property, or fail to pay, you may be subject to towing, civil claims, and/or criminal charges brought by the Host or the authorities.** Turnout is not a party to and will not mediate such actions.
+
+## 8. Prohibited Conduct
+
+You agree not to:
+
+- Use Turnout for anything unlawful, fraudulent, deceptive, or harmful
+- Scam, defraud, or mislead other users
+- Harass, threaten, stalk, or discriminate against any other user
+- Share any other user's personal information — including phone numbers, payment handles, addresses, photos, or communications — with any third party, or republish it anywhere
+- Use any information obtained through Turnout for any purpose other than arranging the specific parking transaction at hand
+- Post false listings, fake reviews, or misleading content
+- Scrape, reverse-engineer, or otherwise abuse the Service
+- Circumvent any access control or security feature
+
+## 9. Privacy and User-Shared Information
+
+When another user shares contact details or payment handles with you through Turnout, that information is shared **only for the specific parking transaction**. You must not save, forward, publish, or use it for marketing, solicitation, data-building, or any other purpose.
+
+**If another user leaks, republishes, or misuses your personal information, that is a matter between you and that user.** Turnout is not responsible for privacy breaches caused by users.
+
+## 10. Disputes Between Users
+
+**All disputes between users — including payment disputes, property damage, overstays, scams, no-shows, misrepresentations, harassment, lost property, personal injury, or anything else — are strictly between the users involved.**
+
+Turnout is not a mediator, arbiter, insurer, or enforcement agent. Turnout will not take sides, issue refunds, collect on your behalf, or investigate other users. Users are encouraged to resolve disputes directly, through small claims court, insurance, or other legal channels.
+
+## 11. No Warranties
+
+**Turnout is provided "as is" and "as available," with all faults.** To the maximum extent permitted by law, Turnout disclaims all warranties, express or implied, including warranties of merchantability, fitness for a particular purpose, title, non-infringement, accuracy, reliability, and availability.
+
+Turnout makes **no warranty** that any listing is accurate, safe, legal, or available; that any Host or Renter is honest, solvent, insured, licensed, or competent; that the Service will be uninterrupted, secure, or error-free; that any dispute will be resolved; or that your vehicle, property, or person will be safe during any transaction arranged through Turnout.
+
+## 12. Limitation of Liability
+
+**To the maximum extent permitted by law, Turnout and its founders, owners, operators, employees, contractors, affiliates, and agents (collectively, the "Turnout Parties") will not be liable for any direct, indirect, incidental, special, consequential, exemplary, or punitive damages arising out of or relating to your use of the Service**, including, without limitation, damages for damage to your vehicle, property, or person; damage to a Host's property; bodily injury or death; lost profits, lost data, lost time, or business interruption; unpaid parking fees or other money owed between users; towing costs or impound fees; legal fees and costs; emotional distress; or any act, omission, or content of another user.
+
+**If, despite the foregoing, any Turnout Party is found liable to you for any reason, the total aggregate liability of all Turnout Parties to you will not exceed CAD $100 or the amount you have paid to Turnout in the twelve months preceding the event giving rise to liability, whichever is greater.**
+
+Some jurisdictions do not permit the exclusion or limitation of certain damages. In those jurisdictions, the above applies to the maximum extent permitted.
+
+## 13. Indemnification
+
+You agree to defend, indemnify, and hold harmless the Turnout Parties from and against any and all claims, damages, liabilities, losses, costs, and expenses (including reasonable attorneys' fees) arising out of or relating to your use of the Service; your violation of these Terms; your violation of any law or the rights of any third party; any transaction, agreement, interaction, or dispute between you and another user; any content you submit to the Service; or any damage, injury, loss, or harm caused by you, your property, your vehicle, or your actions.
+
+This obligation survives the end of your use of Turnout.
+
+## 14. Your Content
+
+You retain ownership of the content you submit to Turnout (listings, photos, descriptions, messages). By submitting content, you grant Turnout a worldwide, royalty-free, non-exclusive, transferable, sub-licensable license to host, display, reproduce, and distribute that content in connection with operating and promoting the Service.
+
+You represent and warrant that you have all rights necessary to submit the content; the content does not infringe any third party's rights or violate any law; the content does not include another person's personal information without their consent; and photos depict the actual parking space listed (not stock images or misleading substitutes).
+
+## 15. Termination
+
+Turnout may suspend or terminate your access to the Service at any time, for any reason or no reason, without notice and without liability. You may stop using Turnout at any time. Provisions of these Terms that by their nature should survive termination (including Sections 10, 11, 12, 13, and 17) survive.
+
+## 16. Changes to These Terms
+
+Turnout may update these Terms at any time. If Turnout makes material changes, we will ask you to re-accept before you continue using the Service. Continued use after acceptance of updated Terms constitutes agreement to those Terms.
+
+## 17. Governing Law and Venue
+
+These Terms are governed by the laws of the Province of British Columbia, Canada, and the federal laws of Canada applicable therein, without regard to conflict-of-laws principles. Any disputes relating to Turnout or these Terms will be brought **exclusively** in the courts located in Vancouver, British Columbia, and you consent to the personal jurisdiction and venue of those courts.
+
+## 18. Severability
+
+If any provision of these Terms is found unenforceable, the remaining provisions remain in full effect.
+
+## 19. Entire Agreement
+
+These Terms are the entire agreement between you and Turnout regarding the Service and supersede any prior agreements between you and Turnout on the subject matter.
+
+## 20. Contact
+
+Questions about these Terms: the contact address currently posted on turnoutparking.com.`;
+
+function hasAcceptedTerms() {
+  if (typeof window === 'undefined' || !window.localStorage) return false;
+  try {
+    const raw = window.localStorage.getItem(TERMS_STORAGE_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    return parsed && parsed.version === TERMS_VERSION;
+  } catch (_) {
+    return false;
+  }
+}
+
+function recordTermsAcceptance() {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(
+      TERMS_STORAGE_KEY,
+      JSON.stringify({
+        version: TERMS_VERSION,
+        acceptedAt: new Date().toISOString(),
+      })
+    );
+  } catch (_) { /* noop */ }
+}
+
+// Render a block of our lightweight markdown-ish terms text into React nodes.
+// Supports: `## heading`, blank-line paragraphs, `- list` items, `**bold**` inline.
+function renderInlineBold(text, keyPrefix = '') {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) => {
+    if (p.startsWith('**') && p.endsWith('**')) {
+      return <strong key={`${keyPrefix}b${i}`} style={{ fontWeight: 700 }}>{p.slice(2, -2)}</strong>;
+    }
+    return <React.Fragment key={`${keyPrefix}t${i}`}>{p}</React.Fragment>;
+  });
+}
+
+function renderTermsContent(text) {
+  const blocks = text.split(/\n\n+/);
+  const out = [];
+  blocks.forEach((raw, i) => {
+    const block = raw.trim();
+    if (!block) return;
+    if (block.startsWith('## ')) {
+      out.push(
+        <h3 key={`h-${i}`} style={{
+          fontFamily: '"Inter", sans-serif',
+          fontSize: 15, fontWeight: 700, color: C.ink,
+          margin: '22px 0 8px',
+          letterSpacing: '-0.01em',
+        }}>
+          {block.slice(3)}
+        </h3>
+      );
+      return;
+    }
+    if (block.startsWith('- ')) {
+      const items = block.split('\n').map((l) => l.replace(/^- /, ''));
+      out.push(
+        <ul key={`u-${i}`} style={{
+          fontFamily: '"Inter", sans-serif',
+          fontSize: 13, lineHeight: 1.55, color: C.ink,
+          margin: '4px 0 8px', paddingLeft: 18,
+        }}>
+          {items.map((it, j) => (
+            <li key={j} style={{ marginBottom: 4 }}>{renderInlineBold(it, `l${i}-${j}`)}</li>
+          ))}
+        </ul>
+      );
+      return;
+    }
+    out.push(
+      <p key={`p-${i}`} style={{
+        fontFamily: '"Inter", sans-serif',
+        fontSize: 13, lineHeight: 1.6, color: C.ink,
+        margin: '0 0 10px',
+      }}>
+        {renderInlineBold(block, `p${i}`)}
+      </p>
+    );
+  });
+  return out;
+}
+
+function TermsAgreement({ onAccept }) {
+  const [scrolledToBottom, setScrolledToBottom] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+
+  const handleScroll = (e) => {
+    const el = e.currentTarget;
+    const remaining = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (remaining < 48) setScrolledToBottom(true);
+  };
+
+  const canAccept = scrolledToBottom && agreed;
+
+  const handleAccept = () => {
+    if (!canAccept) return;
+    recordTermsAcceptance();
+    onAccept();
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 10000,
+      backgroundColor: C.white,
+      display: 'flex', flexDirection: 'column',
+      fontFamily: '"Inter", sans-serif',
+    }}>
+      <div style={{
+        padding: '24px 24px 14px',
+        borderBottom: `1px solid ${C.line}`,
+        backgroundColor: C.white,
+      }}>
+        <div style={{
+          fontSize: 11, fontWeight: 700, color: C.amber,
+          letterSpacing: '0.15em', marginBottom: 10,
+        }}>
+          TERMS OF USE
+        </div>
+        <div style={{
+          fontSize: 22, fontWeight: 800, color: C.ink,
+          lineHeight: 1.15, letterSpacing: '-0.02em',
+        }}>
+          Read before using Turnout.
+        </div>
+        <div style={{
+          fontSize: 13, color: C.inkMute, marginTop: 8, lineHeight: 1.5,
+        }}>
+          Turnout is a free platform. We don't handle payments, verify users, or resolve disputes. Scroll to the bottom, tick the box, and tap Agree to continue. If you don't agree, close this tab.
+        </div>
+      </div>
+
+      <div
+        onScroll={handleScroll}
+        style={{
+          flex: 1,
+          overflow: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          padding: '12px 24px 24px',
+          backgroundColor: C.white,
+        }}
+      >
+        <div style={{
+          fontSize: 12, color: C.inkMute, marginTop: 6, marginBottom: 10,
+        }}>
+          Version {TERMS_VERSION} · Last updated April 21, 2026
+        </div>
+        {renderTermsContent(TERMS_TEXT)}
+        <div style={{
+          marginTop: 18, padding: '14px 16px', backgroundColor: C.bg,
+          borderRadius: 12, border: `1px solid ${C.line}`,
+          fontSize: 12.5, lineHeight: 1.5, color: C.ink, fontWeight: 500,
+        }}>
+          By clicking "I agree," you confirm that you are at least 18 years old, that you have read and understood these Terms, and that you agree to be legally bound by them.
+        </div>
+      </div>
+
+      <div style={{
+        padding: '14px 20px 20px',
+        borderTop: `1px solid ${C.line}`,
+        backgroundColor: C.white,
+      }}>
+        <label
+          style={{
+            display: 'flex', alignItems: 'flex-start', gap: 12,
+            marginBottom: 12,
+            cursor: scrolledToBottom ? 'pointer' : 'not-allowed',
+            opacity: scrolledToBottom ? 1 : 0.55,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={agreed}
+            disabled={!scrolledToBottom}
+            onChange={(e) => setAgreed(e.target.checked)}
+            style={{
+              marginTop: 2, width: 20, height: 20, flexShrink: 0,
+              accentColor: C.ink, cursor: 'inherit',
+            }}
+          />
+          <span style={{
+            fontSize: 13, color: C.ink, lineHeight: 1.5, fontWeight: 500,
+          }}>
+            I'm at least 18, I've read the Terms above, and I agree to be bound by them.
+          </span>
+        </label>
+        <button
+          onClick={handleAccept}
+          disabled={!canAccept}
+          style={{
+            width: '100%', padding: '16px',
+            borderRadius: 14, border: 'none',
+            backgroundColor: canAccept ? C.ink : C.line,
+            color: canAccept ? C.white : C.inkMute,
+            fontSize: 15, fontWeight: 700,
+            cursor: canAccept ? 'pointer' : 'not-allowed',
+            letterSpacing: '-0.01em',
+          }}
+        >
+          {scrolledToBottom ? 'I agree — continue to Turnout' : 'Scroll to the bottom to continue'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // DEMO DATA
 // ============================================================================
 const DEMO_SPOTS = [
@@ -3686,6 +4035,7 @@ export default function Turnout() {
   const [session, setSession] = useState(null);
   const [editingSpot, setEditingSpot] = useState(null);
   const [bookingsRefreshKey, setBookingsRefreshKey] = useState(0);
+  const [termsAccepted, setTermsAccepted] = useState(() => hasAcceptedTerms());
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -3814,6 +4164,10 @@ export default function Turnout() {
     position: 'relative', boxShadow: '0 0 60px rgba(15, 58, 46, 0.08)',
     fontFamily: '"Inter", sans-serif', color: C.ink, display: 'flex', flexDirection: 'column',
   };
+
+  if (!termsAccepted) {
+    return <TermsAgreement onAccept={() => setTermsAccepted(true)} />;
+  }
 
   if (view === 'welcome') {
     return <div style={containerStyle}><Welcome onContinue={handleWelcomeContinue} onStory={() => setView('story')} /></div>;
