@@ -2606,7 +2606,7 @@ function BookingRequestForm({ spot, initialHours = 2, onCancel, onSubmit }) {
         </div>
       </div>
 
-      <div style={{ padding: '14px 20px', borderTop: `1px solid ${C.line}`, backgroundColor: C.white }}>
+      <div style={{ padding: '14px 20px calc(14px + env(safe-area-inset-bottom))', borderTop: `1px solid ${C.line}`, backgroundColor: C.white }}>
         <button
           onClick={handleSubmit}
           disabled={!canSubmit}
@@ -2910,7 +2910,7 @@ function ApproveBookingModal({ booking, onClose, onApprove, isBusy }) {
 
         {/* Sticky footer */}
         <div style={{
-          padding: '12px 16px 18px', borderTop: `1px solid ${C.line}`,
+          padding: '12px 16px calc(18px + env(safe-area-inset-bottom))', borderTop: `1px solid ${C.line}`,
           backgroundColor: C.white, flexShrink: 0,
         }}>
           <div style={{
