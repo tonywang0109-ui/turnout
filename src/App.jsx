@@ -2822,7 +2822,10 @@ function ApproveBookingModal({ booking, onClose, onApprove, isBusy }) {
     }}>
       <div style={{
         width: '100%', maxWidth: 440, backgroundColor: C.white,
-        display: 'flex', flexDirection: 'column', height: '100dvh', maxHeight: '100dvh',
+        display: 'flex', flexDirection: 'column',
+        height: 'calc(100dvh - env(safe-area-inset-bottom))',
+        maxHeight: 'calc(100dvh - env(safe-area-inset-bottom))',
+        marginBottom: 'env(safe-area-inset-bottom)',
         overflow: 'hidden',
       }}>
         {/* Header */}
@@ -2910,7 +2913,7 @@ function ApproveBookingModal({ booking, onClose, onApprove, isBusy }) {
 
         {/* Sticky footer */}
         <div style={{
-          padding: '12px 16px calc(18px + env(safe-area-inset-bottom))', borderTop: `1px solid ${C.line}`,
+          padding: '12px 16px 18px', borderTop: `1px solid ${C.line}`,
           backgroundColor: C.white, flexShrink: 0,
         }}>
           <div style={{
