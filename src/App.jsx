@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { MapPin, Plus, ChevronLeft, Clock, Star, Home, X, Check, Calendar, Minus, ArrowRight, Heart, Share, Search, SlidersHorizontal, Car as CarIcon, Shield, Zap, Lock, Eye, Camera, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from './supabase';
 
@@ -2487,6 +2488,21 @@ function BookingRequestForm({ spot, initialHours = 2, onCancel, onSubmit }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
+  // Renter info (shared with host at request time to match host's info exposure)
+  // Stored in localStorage so repeat bookings prefill.
+  const renterStorageKey = 'turnout:renter_info';
+  const savedRenter = (() => {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(renterStorageKey) : null;
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  })();
+  const [plate, setPlate] = useState(savedRenter.plate || '');
+  const [vehicle, setVehicle] = useState(savedRenter.vehicle || '');
+  const [renterPhone, setRenterPhone] = useState(savedRenter.phone || '');
+  const [payMethod, setPayMethod] = useState(savedRenter.payMethod || 'venmo');
+  const [payHandle, setPayHandle] = useState(savedRenter.payHandle || '');
+
   const start = new Date(startStr);
   const end = new Date(endStr);
   const msDiff = end.getTime() - start.getTime();
@@ -2495,12 +2511,28 @@ function BookingRequestForm({ spot, initialHours = 2, onCancel, onSubmit }) {
   const isDaily = hours >= 24;
   const totalHours = Math.max(0, Number(hours.toFixed(2)));
   const totalPrice = Number((spot.rate * totalHours).toFixed(2));
-  const canSubmit = totalHours > 0 && start.getTime() > Date.now() - 60 * 1000 && !submitting;
+
+  const infoComplete = plate.trim() && vehicle.trim() && renterPhone.trim() && payHandle.trim();
+  const canSubmit = totalHours > 0 && start.getTime() > Date.now() - 60 * 1000 && infoComplete && !submitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     setError(null);
+    // Persist renter info for next booking
+    try {
+      localStorage.setItem(renterStorageKey, JSON.stringify({
+        plate: plate.trim(), vehicle: vehicle.trim(), phone: renterPhone.trim(),
+        payMethod, payHandle: payHandle.trim(),
+      }));
+    } catch { /* ignore */ }
+    const cleanHandle = (() => {
+      const h = payHandle.trim();
+      if (payMethod === 'venmo') return h.replace(/^@+/, '');
+      if (payMethod === 'cashapp') return h.replace(/^\$+/, '');
+      if (payMethod === 'paypal') return h.replace(/^paypal\.me\//i, '');
+      return h;
+    })();
     const result = await onSubmit({
       listing_id: spot.id,
       host_id: spot.user_id,
@@ -2508,6 +2540,11 @@ function BookingRequestForm({ spot, initialHours = 2, onCancel, onSubmit }) {
       end_time: end.toISOString(),
       total_hours: totalHours,
       total_price: totalPrice,
+      renter_vehicle_plate: plate.trim().toUpperCase(),
+      renter_vehicle_description: vehicle.trim(),
+      renter_phone: renterPhone.trim(),
+      renter_payment_method: payMethod,
+      renter_payment_handle: cleanHandle,
       _spot: spot,
     });
     if (result?.error) {
@@ -2590,6 +2627,76 @@ function BookingRequestForm({ spot, initialHours = 2, onCancel, onSubmit }) {
               End time must be after start time.
             </div>
           )}
+        </div>
+
+        {/* Renter info — matches host's info exposure at approval */}
+        <div style={{ marginTop: 8, marginBottom: 12 }}>
+          <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 15, fontWeight: 700, color: C.ink, marginBottom: 4 }}>
+            Your info
+          </div>
+          <div style={{ fontFamily: '"Inter", sans-serif', fontSize: 12, color: C.inkSoft, lineHeight: 1.45, marginBottom: 14 }}>
+            Shared with the host so they can identify your car, contact you, and send a refund if needed.
+          </div>
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>License plate</label>
+          <input
+            value={plate}
+            onChange={(e) => setPlate(e.target.value)}
+            placeholder="8ABC123"
+            style={{ ...inputStyle, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+            autoCapitalize="characters"
+            autoCorrect="off"
+          />
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>Car make, model, color</label>
+          <input
+            value={vehicle}
+            onChange={(e) => setVehicle(e.target.value)}
+            placeholder="Blue 2022 Honda Civic"
+            style={inputStyle}
+          />
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>Phone</label>
+          <input
+            type="tel"
+            value={renterPhone}
+            onChange={(e) => setRenterPhone(e.target.value)}
+            placeholder="310-555-1234"
+            style={inputStyle}
+          />
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>Payment method</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <select
+              value={payMethod}
+              onChange={(e) => setPayMethod(e.target.value)}
+              style={{ ...inputStyle, width: 130, flex: 'none', appearance: 'menulist' }}
+            >
+              <option value="venmo">Venmo</option>
+              <option value="cashapp">Cash App</option>
+              <option value="zelle">Zelle</option>
+              <option value="paypal">PayPal</option>
+              <option value="interac">Interac</option>
+            </select>
+            <input
+              value={payHandle}
+              onChange={(e) => setPayHandle(e.target.value)}
+              placeholder={
+                payMethod === 'venmo' ? 'your-handle' :
+                payMethod === 'cashapp' ? 'yourhandle' :
+                payMethod === 'zelle' ? 'Phone or email' :
+                payMethod === 'paypal' ? 'yourhandle' :
+                'Email'
+              }
+              style={{ ...inputStyle, flex: 1 }}
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+          </div>
         </div>
 
         {errorMsg && (
@@ -2815,9 +2922,9 @@ function ApproveBookingModal({ booking, onClose, onApprove, isBusy }) {
     boxSizing: 'border-box', fontWeight: 500, minWidth: 0,
   };
 
-  return (
+  return createPortal((
     <div style={{
-      position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 1000,
+      position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 10000,
       display: 'flex', alignItems: 'stretch', justifyContent: 'center',
     }}>
       <div style={{
@@ -2938,6 +3045,52 @@ function ApproveBookingModal({ booking, onClose, onApprove, isBusy }) {
         </div>
       </div>
     </div>
+  ), document.body);
+}
+
+// ============================================================================
+// RENTER INFO BOX — shown to host on pending and approved bookings
+// ============================================================================
+function RenterInfoBox({ booking, label = 'Renter info' }) {
+  const plate = booking.renter_vehicle_plate;
+  const vehicle = booking.renter_vehicle_description;
+  const phone = booking.renter_phone;
+  const payMethod = booking.renter_payment_method;
+  const payHandle = booking.renter_payment_handle;
+
+  if (!plate && !vehicle && !phone && !payHandle) return null;
+
+  const digits = (s) => (s || '').replace(/[^\d+]/g, '');
+  const linkStyle = { color: C.green, fontWeight: 700, textDecoration: 'none', wordBreak: 'break-all' };
+  const row = (k, value) => (
+    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginTop: 4 }}>
+      <span style={{ color: C.inkMute, fontWeight: 600, flexShrink: 0 }}>{k}</span>
+      <span style={{ textAlign: 'right', minWidth: 0, flex: 1 }}>{value}</span>
+    </div>
+  );
+
+  const payLabelMap = { venmo: 'Venmo', cashapp: 'Cash App', zelle: 'Zelle', paypal: 'PayPal', interac: 'Interac' };
+  const payDisplay = (() => {
+    if (!payMethod || !payHandle) return null;
+    if (payMethod === 'venmo') return <a href={`https://venmo.com/${payHandle}`} target="_blank" rel="noopener noreferrer" style={linkStyle}>@{payHandle}</a>;
+    if (payMethod === 'cashapp') return <a href={`https://cash.app/$${payHandle}`} target="_blank" rel="noopener noreferrer" style={linkStyle}>${payHandle}</a>;
+    if (payMethod === 'paypal') return <a href={`https://paypal.me/${payHandle}`} target="_blank" rel="noopener noreferrer" style={linkStyle}>paypal.me/{payHandle}</a>;
+    return <span style={{ color: C.ink, fontWeight: 700 }}>{payHandle}</span>;
+  })();
+
+  return (
+    <div style={{
+      marginTop: 10, padding: '12px 14px', backgroundColor: C.amberSoft,
+      borderRadius: 10, fontFamily: '"Inter", sans-serif', fontSize: 12,
+    }}>
+      <div style={{ color: C.inkMute, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: 10, marginBottom: 6 }}>
+        {label}
+      </div>
+      {plate && row('Plate', <span style={{ color: C.ink, fontWeight: 700, letterSpacing: '0.05em' }}>{plate}</span>)}
+      {vehicle && row('Car', <span style={{ color: C.ink, fontWeight: 700 }}>{vehicle}</span>)}
+      {phone && row('Phone', <a href={`tel:${digits(phone)}`} style={linkStyle}>{phone}</a>)}
+      {payDisplay && row(payLabelMap[payMethod] || 'Payment', payDisplay)}
+    </div>
   );
 }
 
@@ -3055,6 +3208,7 @@ function HostBookingsList({ userId, refreshKey, onUpdate }) {
           <span>{b.total_hours} hr</span>
           <span>${b.total_price}</span>
         </div>
+        <RenterInfoBox booking={b} />
         {b.status === 'approved' && (b._counterparty_email || b.host_contact) && (
           <>
             <ContactBox email={b._counterparty_email} contact={null} label="Renter contact" />
@@ -3752,6 +3906,7 @@ function TripsView({ session, refreshKey, onCancel }) {
               {b.status === 'approved' && (b._counterparty_email || b.host_contact) && (
                 <ContactBox email={b._counterparty_email} contact={b.host_contact} label="Host contact" />
               )}
+              <RenterInfoBox booking={b} label="What you shared" />
               {canCancel && (
                 <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
                   <button
