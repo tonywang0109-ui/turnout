@@ -3058,6 +3058,11 @@ function RenterInfoBox({ booking, label = 'Renter info' }) {
   const payMethod = booking.renter_payment_method;
   const payHandle = booking.renter_payment_handle;
 
+  // Gate sensitive info: plate + car visible at pending so host can decide;
+  // phone + payment only revealed after approval to protect renter PII.
+  const isApproved = booking.status === 'approved';
+  const showContact = isApproved;
+
   if (!plate && !vehicle && !phone && !payHandle) return null;
 
   const digits = (s) => (s || '').replace(/[^\d+]/g, '');
@@ -3088,8 +3093,13 @@ function RenterInfoBox({ booking, label = 'Renter info' }) {
       </div>
       {plate && row('Plate', <span style={{ color: C.ink, fontWeight: 700, letterSpacing: '0.05em' }}>{plate}</span>)}
       {vehicle && row('Car', <span style={{ color: C.ink, fontWeight: 700 }}>{vehicle}</span>)}
-      {phone && row('Phone', <a href={`tel:${digits(phone)}`} style={linkStyle}>{phone}</a>)}
-      {payDisplay && row(payLabelMap[payMethod] || 'Payment', payDisplay)}
+      {showContact && phone && row('Phone', <a href={`tel:${digits(phone)}`} style={linkStyle}>{phone}</a>)}
+      {showContact && payDisplay && row(payLabelMap[payMethod] || 'Payment', payDisplay)}
+      {!showContact && (phone || payHandle) && (
+        <div style={{ marginTop: 8, fontSize: 11, color: C.inkMute, fontStyle: 'italic' }}>
+          Phone &amp; payment shared on approval.
+        </div>
+      )}
     </div>
   );
 }

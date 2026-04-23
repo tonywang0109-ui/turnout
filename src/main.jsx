@@ -278,9 +278,22 @@ if (typeof window !== 'undefined' && !window.storage) {
     // ========================================================================
     // BOOKINGS
     // ========================================================================
-    createBooking: async ({ listing_id, host_id, start_time, end_time, total_hours, total_price }) => {
+    createBooking: async (payload) => {
       const user = await getCurrentUser()
       if (!user) return { error: 'not_signed_in' }
+      const {
+        listing_id,
+        host_id,
+        start_time,
+        end_time,
+        total_hours,
+        total_price,
+        renter_vehicle_plate,
+        renter_vehicle_description,
+        renter_phone,
+        renter_payment_method,
+        renter_payment_handle,
+      } = payload || {}
       if (user.id === host_id) return { error: 'cannot_book_own_listing' }
 
       const { data: conflicts, error: conflictError } = await withTimeout(
@@ -300,17 +313,28 @@ if (typeof window !== 'undefined' && !window.storage) {
       if (conflicts && conflicts.length > 0) {
         return { error: 'time_conflict' }
       }
+
+      // Build insert row with renter info included (added Session 10 — closes
+      // the info asymmetry between host and renter). Only include fields that
+      // are actually present so older clients still work.
+      const row = {
+        listing_id,
+        renter_id: user.id,
+        host_id,
+        start_time,
+        end_time,
+        total_hours,
+        total_price,
+        status: 'pending',
+      }
+      if (renter_vehicle_plate) row.renter_vehicle_plate = renter_vehicle_plate
+      if (renter_vehicle_description) row.renter_vehicle_description = renter_vehicle_description
+      if (renter_phone) row.renter_phone = renter_phone
+      if (renter_payment_method) row.renter_payment_method = renter_payment_method
+      if (renter_payment_handle) row.renter_payment_handle = renter_payment_handle
+
       const { data, error } = await withTimeout(
-        supabase.from('bookings').insert({
-          listing_id,
-          renter_id: user.id,
-          host_id,
-          start_time,
-          end_time,
-          total_hours,
-          total_price,
-          status: 'pending',
-        }).select().single(),
+        supabase.from('bookings').insert(row).select().single(),
         8000,
         'bookings.insert'
       )
